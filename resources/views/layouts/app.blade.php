@@ -73,11 +73,12 @@
         <div>
           <h1>@yield('title', 'Dashboard')</h1>
           <div class="path">@yield('breadcrumb', 'Beranda')</div>
+          <div class="kantor-chip kantor-chip-mobile"><i class="bi bi-building"></i> {{ $activeKantorNama }}</div>
         </div>
       </div>
       <div class="top-right">
-        <div class="kantor-chip"><i class="bi bi-building"></i> {{ $activeKantorNama }}</div>
-        <div class="user-chip">
+        <div class="kantor-chip kantor-chip-desktop"><i class="bi bi-building"></i> {{ $activeKantorNama }}</div>
+        <div class="user-chip" title="{{ $user->nama_lengkap }} &middot; {{ ucwords(str_replace('_', ' ', $user->role)) }}">
           <div class="av">{{ strtoupper(substr($user->nama_lengkap, 0, 2)) }}</div>
           <div class="meta">
             <b>{{ $user->nama_lengkap }}</b>

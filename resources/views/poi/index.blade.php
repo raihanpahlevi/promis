@@ -61,7 +61,7 @@
               <option value="{{ $statusMitra }}" @selected(($filters['status_mitra'] ?? '') === $statusMitra)>{{ $statusMitra }}</option>
             @endforeach
           </select>
-          <button type="submit" class="btn-primary-custom" style="padding:7px 14px;font-size:12px;width:auto">Terapkan</button>
+          <button type="submit" class="btn-primary-custom" style="padding:10px 16px;font-size:13px;width:auto">Terapkan</button>
           @if (array_filter($filters ?? []))
             <a href="{{ route('poi.index') }}" style="align-self:center;font-size:12px;color:var(--brand-500);text-decoration:none">Reset</a>
           @endif
@@ -77,7 +77,7 @@
       </div>
     @else
       <div style="overflow-x:auto">
-        <table class="table-ledger">
+        <table class="table-ledger table-responsive-stack">
           <thead>
             <tr>
               <th>Nama POI</th>
@@ -92,7 +92,7 @@
           <tbody>
             @foreach ($pois as $poi)
               <tr>
-                <td>
+                <td class="cell-heading">
                   <b>{{ $poi->nama_poi }}</b><br>
                   @if ($poi->alamat)
                     <a class="addr-link" href="https://www.google.com/maps/search/?api=1&query={{ urlencode($poi->alamat) }}" target="_blank" rel="noopener noreferrer" title="Buka di Google Maps">
@@ -102,16 +102,15 @@
                     <small style="color:#8A6B55">-</small>
                   @endif
                 </td>
-                <td>{{ $poi->kantor->nama ?? '-' }}</td>
-                <td>{{ $poi->sektor }}</td>
-                <td>{{ $poi->area ?? '-' }}</td>
-                <td><span class="badge {{ $poi->statusMitraBadgeClass() }}">{{ $poi->status_mitra }}</span></td>
-                <td>{{ $poi->pic ?? '-' }}</td>
-                <td>
-                  <a href="{{ route('poi.show', $poi) }}" style="color:var(--brand-500);text-decoration:none;font-size:12px"><i class="bi bi-eye"></i> Detail</a>
+                <td data-label="Kantor">{{ $poi->kantor->nama ?? '-' }}</td>
+                <td data-label="Sektor">{{ $poi->sektor }}</td>
+                <td data-label="Area">{{ $poi->area ?? '-' }}</td>
+                <td data-label="Status Mitra"><span class="badge {{ $poi->statusMitraBadgeClass() }}">{{ $poi->status_mitra }}</span></td>
+                <td data-label="PIC">{{ $poi->pic ?? '-' }}</td>
+                <td class="cell-actions">
+                  <a href="{{ route('poi.show', $poi) }}" class="action-link"><i class="bi bi-eye"></i> Detail</a>
                   @if ($canManage)
-                    &nbsp;·&nbsp;
-                    <a href="{{ route('poi.edit', $poi) }}" style="color:var(--brand-500);text-decoration:none;font-size:12px"><i class="bi bi-pencil"></i> Edit</a>
+                    <a href="{{ route('poi.edit', $poi) }}" class="action-link"><i class="bi bi-pencil"></i> Edit</a>
                   @endif
                 </td>
               </tr>

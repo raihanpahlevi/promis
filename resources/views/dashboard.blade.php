@@ -15,7 +15,7 @@
   @if ($kantorOptions->isNotEmpty())
     <form method="GET" action="{{ route('dashboard') }}" class="panel" style="margin-bottom:16px;padding:14px 16px" id="formKantorMonitor">
       <input type="hidden" name="periode" value="{{ $periode }}">
-      <div style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px">
+      <div class="kantor-monitor-row" style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px">
         <div style="flex:1;min-width:260px">
           <div class="kantor-picker-chips" id="kantorChipList"></div>
           <div class="poi-wrap" style="margin-top:8px;max-width:380px">
@@ -24,7 +24,7 @@
             <div id="kantorPickerDropdown" class="autocomplete-dropdown"></div>
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:10px;margin-left:auto;padding-top:2px">
+        <div class="kantor-monitor-actions" style="display:flex;align-items:center;gap:10px;margin-left:auto;padding-top:2px">
           <button type="submit" class="btn-primary-custom" style="width:auto;padding:8px 18px;font-size:12.5px">Terapkan</button>
           @if ($selectedKantorIds !== [])
             <a href="{{ route('dashboard', array_filter(['periode' => $periode])) }}" style="font-size:12px;color:var(--brand-500);text-decoration:none">Reset</a>
@@ -163,18 +163,20 @@
         </div>
       </div>
 
-      <table class="table-ledger" style="margin-bottom:12px">
-        <thead><tr><th>Hasil Kunjungan</th><th class="num" style="text-align:right">Jumlah</th></tr></thead>
-        <tbody>
-          @foreach ($funnel as $status => $total)
-            <tr><td>{{ $status }}</td><td class="num" style="text-align:right;font-weight:700">{{ number_format($total) }}</td></tr>
-          @endforeach
-          <tr style="background:var(--brand-50)">
-            <td style="font-weight:800">TOTAL</td>
-            <td class="num" style="text-align:right;font-weight:800">{{ number_format($totalHasilKunjungan) }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div style="overflow-x:auto">
+        <table class="table-ledger" style="margin-bottom:12px">
+          <thead><tr><th>Hasil Kunjungan</th><th class="num" style="text-align:right">Jumlah</th></tr></thead>
+          <tbody>
+            @foreach ($funnel as $status => $total)
+              <tr><td>{{ $status }}</td><td class="num" style="text-align:right;font-weight:700">{{ number_format($total) }}</td></tr>
+            @endforeach
+            <tr style="background:var(--brand-50)">
+              <td style="font-weight:800">TOTAL</td>
+              <td class="num" style="text-align:right;font-weight:800">{{ number_format($totalHasilKunjungan) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <h4 style="margin:6px 0;font-size:12.5px;color:var(--brand-700)">Produk BNI &ndash; Closing</h4>
       <div class="produk-grid">

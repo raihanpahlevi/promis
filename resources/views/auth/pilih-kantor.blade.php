@@ -26,7 +26,7 @@
         <div class="input-wrap">
           <i class="bi bi-building leading"></i>
           <select name="kantor_id" required
-                  style="width:100%;padding:12px 14px 12px 40px;border-radius:12px;border:1.5px solid var(--brand-100);font-size:14px;background:#fff;color:var(--brand-900);outline:none;appearance:none">
+                  style="width:100%;padding:12px 14px 12px 40px;border-radius:12px;border:1.5px solid var(--brand-100);font-size:16px;background:#fff;color:var(--brand-900);outline:none;appearance:none">
             <option value="" disabled selected>Pilih kantor&hellip;</option>
             @foreach ($kantorOptions as $kantor)
               <option value="{{ $kantor->id }}">{{ $kantor->nama }}</option>

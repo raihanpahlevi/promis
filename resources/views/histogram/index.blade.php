@@ -11,8 +11,8 @@
 @section('content')
   <form method="GET" action="{{ route('histogram.index') }}" style="margin-bottom:16px">
     <div class="filters" style="flex-wrap:wrap">
-      <input type="date" name="dari" value="{{ $dari }}" style="padding:7px 10px;border-radius:8px;border:1px solid var(--brand-100)">
-      <input type="date" name="sampai" value="{{ $sampai }}" style="padding:7px 10px;border-radius:8px;border:1px solid var(--brand-100)">
+      <input type="date" name="dari" value="{{ $dari }}" style="padding:9px 10px;border-radius:8px;border:1px solid var(--brand-100);font-size:16px">
+      <input type="date" name="sampai" value="{{ $sampai }}" style="padding:9px 10px;border-radius:8px;border:1px solid var(--brand-100);font-size:16px">
       @if ($kantorOptions->isNotEmpty())
         <select name="kantor" @disabled($kantorLocked)>
           @unless ($kantorLocked)
@@ -26,7 +26,7 @@
           <input type="hidden" name="kantor" value="{{ $selectedKantorId }}">
         @endif
       @endif
-      <button type="submit" class="btn-primary-custom" style="padding:7px 16px;font-size:12px;width:auto">Terapkan</button>
+      <button type="submit" class="btn-primary-custom" style="padding:10px 16px;font-size:13px;width:auto">Terapkan</button>
     </div>
   </form>
 
@@ -59,17 +59,17 @@
       </div>
     @else
       <div style="overflow-x:auto">
-        <table class="table-ledger">
+        <table class="table-ledger table-responsive-stack">
           <thead>
-            <tr><th>Tanggal</th><th>Kantor</th><th>Nama POI</th><th>Produk</th></tr>
+            <tr><th>Nama POI</th><th>Tanggal</th><th>Kantor</th><th>Produk</th></tr>
           </thead>
           <tbody>
             @foreach ($detail as $row)
               <tr>
-                <td>{{ $row->tanggal_kunjungan->format('d M Y') }}</td>
-                <td>{{ $row->poi->kantor->nama ?? '-' }}</td>
-                <td>{{ $row->poi->nama_poi ?? '-' }}</td>
-                <td>{{ $row->produkList->pluck('produk')->implode(', ') ?: '-' }}</td>
+                <td class="cell-heading">{{ $row->poi->nama_poi ?? '-' }}</td>
+                <td data-label="Tanggal">{{ $row->tanggal_kunjungan->format('d M Y') }}</td>
+                <td data-label="Kantor">{{ $row->poi->kantor->nama ?? '-' }}</td>
+                <td data-label="Produk">{{ $row->produkList->pluck('produk')->implode(', ') ?: '-' }}</td>
               </tr>
             @endforeach
           </tbody>

@@ -108,7 +108,7 @@
           <div class="field" style="margin-bottom:16px">
             <label style="display:block;font-size:12.5px;font-weight:600;color:var(--brand-700);margin-bottom:6px">Hasil kunjungan</label>
             <select name="hasil" id="hasilSelect" required
-                    style="width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--brand-100);font-size:14px;background:#fff;color:var(--brand-900)">
+                    style="width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--brand-100);font-size:16px;background:#fff;color:var(--brand-900)">
               <option value="" disabled {{ old('hasil') ? '' : 'selected' }}>Pilih hasil&hellip;</option>
               @foreach ($hasilOptions as $hasil)
                 <option value="{{ $hasil }}" {{ old('hasil') === $hasil ? 'selected' : '' }}>{{ $hasil }}</option>
@@ -119,7 +119,7 @@
           <div class="field" id="statusMitraField" style="margin-bottom:16px;display:none">
             <label style="display:block;font-size:12.5px;font-weight:600;color:var(--brand-700);margin-bottom:6px">Status mitra baru</label>
             <select name="status_mitra_baru" id="statusMitraSelect"
-                    style="width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--brand-100);font-size:14px;background:#fff;color:var(--brand-900)">
+                    style="width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--brand-100);font-size:16px;background:#fff;color:var(--brand-900)">
               <option value="" disabled {{ old('status_mitra_baru') ? '' : 'selected' }}>Pilih status mitra&hellip;</option>
               @foreach ($statusMitraAfterClosingOptions as $status)
                 <option value="{{ $status }}" {{ old('status_mitra_baru') === $status ? 'selected' : '' }}>{{ $status }}</option>
@@ -130,15 +130,15 @@
 
           <div class="field" style="margin-bottom:16px">
             <label style="display:block;font-size:12.5px;font-weight:600;color:var(--brand-700);margin-bottom:6px">Nominal (opsional)</label>
-            <input type="text" id="nominalView" placeholder="Rp 0" autocomplete="off"
-                   style="width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--brand-100);font-size:14px;color:var(--brand-900)">
+            <input type="text" id="nominalView" placeholder="Rp 0" autocomplete="off" inputmode="numeric"
+                   style="width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--brand-100);font-size:16px;color:var(--brand-900)">
             <input type="hidden" name="nominal" id="nominal" value="{{ old('nominal') }}">
           </div>
 
           <div class="field" style="margin-bottom:20px">
             <label style="display:block;font-size:12.5px;font-weight:600;color:var(--brand-700);margin-bottom:6px">Catatan (opsional)</label>
             <textarea name="catatan" rows="3" placeholder="Catatan tambahan..."
-                      style="width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--brand-100);font-size:14px;font-family:inherit;color:var(--brand-900)">{{ old('catatan') }}</textarea>
+                      style="width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--brand-100);font-size:16px;font-family:inherit;color:var(--brand-900)">{{ old('catatan') }}</textarea>
           </div>
 
           <button type="submit" class="btn-primary-custom" style="width:auto;padding:12px 24px">

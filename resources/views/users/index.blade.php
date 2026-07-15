@@ -50,7 +50,7 @@
             <option value="1" @selected(($filters['is_active'] ?? '') === '1')>Aktif</option>
             <option value="0" @selected(($filters['is_active'] ?? '') === '0')>Nonaktif</option>
           </select>
-          <button type="submit" class="btn-primary-custom" style="padding:7px 14px;font-size:12px;width:auto">Terapkan</button>
+          <button type="submit" class="btn-primary-custom" style="padding:10px 16px;font-size:13px;width:auto">Terapkan</button>
           @if (array_filter($filters ?? []))
             <a href="{{ route('user.index') }}" style="align-self:center;font-size:12px;color:var(--brand-500);text-decoration:none">Reset</a>
           @endif
@@ -66,7 +66,7 @@
       </div>
     @else
       <div style="overflow-x:auto">
-        <table class="table-ledger">
+        <table class="table-ledger table-responsive-stack">
           <thead>
             <tr>
               <th>NPP</th>
@@ -81,20 +81,20 @@
           <tbody>
             @foreach ($users as $u)
               <tr>
-                <td><b>{{ $u->npp }}</b></td>
-                <td>{{ $u->nama_lengkap }}</td>
-                <td>{{ $u->unit->nama ?? '-' }}</td>
-                <td>{{ $u->role }}</td>
-                <td>{{ $u->kantor->pluck('nama')->join(', ') ?: '-' }}</td>
-                <td>
+                <td class="cell-heading"><b>{{ $u->npp }}</b></td>
+                <td data-label="Nama Lengkap">{{ $u->nama_lengkap }}</td>
+                <td data-label="Unit / Jabatan">{{ $u->unit->nama ?? '-' }}</td>
+                <td data-label="Role">{{ $u->role }}</td>
+                <td data-label="Kantor">{{ $u->kantor->pluck('nama')->join(', ') ?: '-' }}</td>
+                <td data-label="Status">
                   @if ($u->is_active)
                     <span class="badge badge-ok">Aktif</span>
                   @else
                     <span class="badge badge-no">Nonaktif</span>
                   @endif
                 </td>
-                <td>
-                  <a href="{{ route('user.edit', $u) }}" style="color:var(--brand-500);text-decoration:none;font-size:12px"><i class="bi bi-pencil"></i> Edit</a>
+                <td class="cell-actions">
+                  <a href="{{ route('user.edit', $u) }}" class="action-link"><i class="bi bi-pencil"></i> Edit</a>
                 </td>
               </tr>
             @endforeach

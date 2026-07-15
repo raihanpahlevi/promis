@@ -14,8 +14,8 @@
   <form method="GET" action="{{ route('laporan.rekap-sales') }}" style="margin-bottom:16px">
     <input type="hidden" name="mode" value="{{ $mode }}">
     <div class="filters" style="flex-wrap:wrap">
-      <input type="date" name="dari" value="{{ $dari }}" style="padding:7px 10px;border-radius:8px;border:1px solid var(--brand-100)">
-      <input type="date" name="sampai" value="{{ $sampai }}" style="padding:7px 10px;border-radius:8px;border:1px solid var(--brand-100)">
+      <input type="date" name="dari" value="{{ $dari }}" style="padding:9px 10px;border-radius:8px;border:1px solid var(--brand-100);font-size:16px">
+      <input type="date" name="sampai" value="{{ $sampai }}" style="padding:9px 10px;border-radius:8px;border:1px solid var(--brand-100);font-size:16px">
       <select name="unit">
         <option value="">Semua Unit</option>
         @foreach ($unitOptions as $unit)
@@ -30,7 +30,7 @@
           @endforeach
         </select>
       @endif
-      <button type="submit" class="btn-primary-custom" style="padding:7px 16px;font-size:12px;width:auto">Terapkan</button>
+      <button type="submit" class="btn-primary-custom" style="padding:10px 16px;font-size:13px;width:auto">Terapkan</button>
     </div>
   </form>
 
@@ -63,18 +63,18 @@
         </div>
       @else
         <div style="overflow-x:auto">
-          <table class="table-ledger">
+          <table class="table-ledger table-responsive-stack">
             <thead>
               <tr><th>Nama Sales</th><th>Unit</th><th>Kantor</th><th class="num" style="text-align:right">Total Visit</th><th class="num" style="text-align:right">Total Closing</th></tr>
             </thead>
             <tbody>
               @foreach ($kunjunganRows as $u)
                 <tr>
-                  <td>{{ $u->nama_lengkap }}</td>
-                  <td>{{ $u->unit->nama ?? '-' }}</td>
-                  <td>{{ $u->kantor->pluck('nama')->join(', ') ?: '-' }}</td>
-                  <td class="num" style="text-align:right"><strong>{{ $u->total_visit }}</strong></td>
-                  <td class="num" style="text-align:right">{{ $u->total_closing }}</td>
+                  <td class="cell-heading">{{ $u->nama_lengkap }}</td>
+                  <td data-label="Unit">{{ $u->unit->nama ?? '-' }}</td>
+                  <td data-label="Kantor">{{ $u->kantor->pluck('nama')->join(', ') ?: '-' }}</td>
+                  <td data-label="Total Visit" class="num" style="text-align:right"><strong>{{ $u->total_visit }}</strong></td>
+                  <td data-label="Total Closing" class="num" style="text-align:right">{{ $u->total_closing }}</td>
                 </tr>
               @endforeach
             </tbody>
@@ -91,17 +91,17 @@
         </div>
       @else
         <div style="overflow-x:auto">
-          <table class="table-ledger">
+          <table class="table-ledger table-responsive-stack">
             <thead>
               <tr><th>Nama Sales</th><th>Unit</th><th>Kantor</th><th>Status</th></tr>
             </thead>
             <tbody>
               @foreach ($tidakRows as $u)
                 <tr>
-                  <td>{{ $u->nama_lengkap }}</td>
-                  <td>{{ $u->unit->nama ?? '-' }}</td>
-                  <td>{{ $u->kantor->pluck('nama')->join(', ') ?: '-' }}</td>
-                  <td><span class="badge badge-no">Tidak Kunjungan</span></td>
+                  <td class="cell-heading">{{ $u->nama_lengkap }}</td>
+                  <td data-label="Unit">{{ $u->unit->nama ?? '-' }}</td>
+                  <td data-label="Kantor">{{ $u->kantor->pluck('nama')->join(', ') ?: '-' }}</td>
+                  <td data-label="Status"><span class="badge badge-no">Tidak Kunjungan</span></td>
                 </tr>
               @endforeach
             </tbody>

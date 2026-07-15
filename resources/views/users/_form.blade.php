@@ -1,5 +1,5 @@
 @php
-  $selectStyle = 'width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--brand-100);font-size:14px;background:#fff;color:var(--brand-900);outline:none;appearance:none';
+  $selectStyle = 'width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--brand-100);font-size:16px;background:#fff;color:var(--brand-900);outline:none;appearance:none';
   $old = fn ($key, $default = null) => old($key, $user->{$key} ?? $default);
   $oldKantorIds = old('kantor_ids', $user ? $user->kantor->pluck('id')->all() : []);
   $oldUnitName = old('unit_name', $user->unit->nama ?? null);
@@ -63,7 +63,7 @@
   <label>Kantor <small style="font-weight:400;color:#8A6B55">(wajib minimal 1, kecuali role admin)</small></label>
   <div style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;border:1.5px solid var(--brand-100);border-radius:12px;padding:12px">
     @forelse ($kantorOptions as $kantor)
-      <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:400">
+      <label class="produk-checkbox" style="font-size:13.5px">
         <input type="checkbox" name="kantor_ids[]" value="{{ $kantor->id }}" @checked(in_array($kantor->id, $oldKantorIds))>
         {{ $kantor->nama }}
       </label>

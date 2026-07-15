@@ -1,5 +1,5 @@
 @php
-  $selectStyle = 'width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--brand-100);font-size:14px;background:#fff;color:var(--brand-900);outline:none;appearance:none';
+  $selectStyle = 'width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--brand-100);font-size:16px;background:#fff;color:var(--brand-900);outline:none;appearance:none';
   $old = fn ($key, $default = null) => old($key, $poi->{$key} ?? $default);
 @endphp
 

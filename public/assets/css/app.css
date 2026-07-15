@@ -60,7 +60,7 @@ body{
 }
 .input-wrap input{
   width:100%;padding:12px 14px 12px 40px;border-radius:12px;border:1.5px solid var(--brand-100);
-  font-size:14px;background:#fff;color:var(--brand-900);outline:none;
+  font-size:16px;background:#fff;color:var(--brand-900);outline:none;
   transition:border-color .15s,box-shadow .15s;
 }
 .input-wrap input:focus{border-color:var(--brand-500);box-shadow:0 0 0 3px rgba(111,78,55,.12)}
@@ -163,7 +163,7 @@ body{
 .panel{background:#fff;border:1px solid var(--brand-100);border-radius:16px;padding:20px}
 .panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
 .panel-head h3{font-size:14.5px;font-weight:700;margin:0}
-.panel-head .filters{display:flex;gap:8px}
+.filters{display:flex;gap:8px;flex-wrap:wrap}
 .filters select{
   font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--brand-100);color:var(--brand-700);background:var(--brand-50);
 }
@@ -198,7 +198,7 @@ tbody tr:hover{background:var(--brand-50)}
 .addr-link:hover i{color:var(--brand-500)}
 
 .search-box{display:flex;align-items:center;gap:8px;background:var(--brand-50);border-radius:10px;padding:8px 12px;width:240px}
-.search-box input{border:none;background:transparent;outline:none;font-size:12.5px;width:100%;color:var(--brand-900)}
+.search-box input{border:none;background:transparent;outline:none;font-size:16px;width:100%;color:var(--brand-900)}
 .search-box i{color:var(--brand-400)}
 
 .mobile-toggle{display:none;background:none;border:none;font-size:20px;color:var(--brand-900);cursor:pointer}
@@ -252,7 +252,7 @@ tbody tr:hover{background:var(--brand-50)}
 .poi-wrap{position:relative;width:100%}
 #poiInput,.autocomplete-input{
   width:100%;box-sizing:border-box;padding:12px 14px 12px 40px;border-radius:12px;
-  border:1.5px solid var(--brand-100);font-size:14px;font-family:'Inter',sans-serif;
+  border:1.5px solid var(--brand-100);font-size:16px;font-family:'Inter',sans-serif;
   background:#fff;color:var(--brand-900);outline:none;transition:border-color .15s,box-shadow .15s;
 }
 #poiInput:focus,.autocomplete-input:focus{border-color:var(--brand-500);box-shadow:0 0 0 3px rgba(111,78,55,.12)}
@@ -422,4 +422,98 @@ table.table-ledger tbody td{padding:10px 12px;font-size:12.5px}
 .left-overlay{
   position:absolute;inset:0;z-index:1;
   background:linear-gradient(165deg,rgba(62,39,35,.86),rgba(111,78,55,.78));
+}
+
+/* =========================================================================
+   Mobile pass (2026-07-15) — sales log kunjungan from the field on a phone,
+   this is the primary use pattern (PRD "tampilan"), not an edge case.
+   Presentation-only: no selector here changes what data renders, only how.
+   ========================================================================= */
+
+/* ---- Topbar: kantor-chip has two render slots (desktop: top-right row
+   next to user-chip; mobile: under the page title) — CSS swaps which one
+   is visible instead of forcing both chips into one cramped row. ---- */
+.kantor-chip-mobile{display:none}
+
+/* ---- Touch targets: bump hit areas to ~40-44px without changing the
+   visual icon/control size (padding trick keeps layout unchanged). ---- */
+.toggle-eye{padding:12px;margin:-12px;box-sizing:content-box;border-radius:8px}
+.logout-btn{width:42px;height:42px}
+.mobile-toggle{padding:9px;margin:-9px;border-radius:8px;box-sizing:content-box}
+.produk-checkbox{min-height:40px;padding:6px 8px;border-radius:8px}
+.produk-checkbox input{width:17px;height:17px;flex-shrink:0}
+.action-link{
+  display:inline-flex;align-items:center;gap:5px;min-height:36px;padding:4px 6px;
+  border-radius:6px;text-decoration:none;font-size:12.5px;color:var(--brand-500);
+}
+.action-link:hover{background:var(--brand-50)}
+.action-link.danger{color:var(--danger)}
+.action-link.danger:hover{background:var(--danger-bg)}
+
+/* ---- Filter bars (.panel-head .filters): full-width stacked controls on
+   narrow screens instead of shrinking every select down to unreadable. ---- */
+@media (max-width:640px){
+  .panel-head{flex-direction:column;align-items:stretch}
+  .search-box{width:100%}
+  .filters{flex-direction:column;align-items:stretch;width:100%}
+  .filters select,
+  .filters input,
+  .filters button,
+  .filters a{width:100%;text-align:center}
+  .filters select{font-size:16px;padding:10px 12px}
+
+  /* .produk-checkbox-grid drops to 2 cols at 760px already; some product
+     names ("BIONS Sekuritas", "Trade Finance") still crowd a 2nd column on
+     real 360-390px phones — go single column there. */
+  .produk-checkbox-grid{grid-template-columns:1fr}
+  .produk-grid{grid-template-columns:repeat(2,1fr)}
+
+  /* Dashboard: multi-kantor monitor picker — stack instead of squeezing the
+     "Terapkan/Reset" actions into the same row as the chip input. */
+  .kantor-monitor-row{flex-direction:column}
+  .kantor-monitor-actions{margin-left:0!important;width:100%}
+  .kantor-monitor-actions .btn-primary-custom{flex:1}
+  .kantor-picker-chip-remove{padding:6px 9px;font-size:16px}
+  .periode-tabs a{padding:9px 14px}
+  .section-tabs{gap:18px}
+  .section-tabs a{padding:12px 2px}
+
+  .topbar{flex-wrap:nowrap;align-items:flex-start}
+  .kantor-chip-desktop{display:none}
+  .kantor-chip-mobile{display:inline-flex;margin-top:8px}
+  .user-chip .meta{display:none}
+  .user-chip{padding:4px}
+  .top-right{gap:8px;flex-shrink:0}
+
+  /* ---- Table -> card: apply `.table-responsive-stack` to a <table> and
+     add data-label="Column Name" to each <td> (first cell = card title via
+     .cell-heading, last "aksi" cell = button row via .cell-actions). ---- */
+  .table-responsive-stack thead{display:none}
+  .table-responsive-stack,.table-responsive-stack tbody,.table-responsive-stack tr,.table-responsive-stack td{
+    display:block;width:100%;
+  }
+  .table-responsive-stack tbody tr{
+    background:#fff;border:1px solid var(--brand-100);border-radius:14px;
+    padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 2px rgba(62,39,35,.05);
+  }
+  .table-responsive-stack tbody tr:hover{background:#fff}
+  .table-responsive-stack td{
+    display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+    padding:8px 0;border-bottom:1px solid #F3ECE4;text-align:right;font-size:13px;
+  }
+  .table-responsive-stack td:last-child{border-bottom:none}
+  .table-responsive-stack td::before{
+    content:attr(data-label);font-weight:700;color:var(--brand-700);font-size:11px;
+    text-transform:uppercase;letter-spacing:.3px;text-align:left;flex-shrink:0;
+  }
+  .table-responsive-stack td:not([data-label])::before{content:none}
+  .table-responsive-stack td.cell-heading{
+    display:block;text-align:left;font-size:14.5px;font-weight:800;color:var(--brand-900);
+    padding-bottom:10px;
+  }
+  .table-responsive-stack td.cell-heading::before{content:none}
+  .table-responsive-stack td.cell-actions{
+    display:flex;justify-content:flex-start;flex-wrap:wrap;gap:6px 16px;text-align:left;padding-top:10px;
+  }
+  .table-responsive-stack td.cell-actions::before{content:none}
 }
