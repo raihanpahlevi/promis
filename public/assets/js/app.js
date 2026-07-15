@@ -43,3 +43,37 @@
     showBar();
   }, true);
 })();
+
+/* Mobile sidebar: tap the hamburger to open, tap the dimmed backdrop (or any
+   nav link, or Escape) to close — previously only the hamburger itself could
+   close it again, which reads as "stuck" on a phone. */
+(function () {
+  var sidebar = document.getElementById('sidebar');
+  var toggle = document.getElementById('sidebarToggle');
+  var backdrop = document.getElementById('sidebarBackdrop');
+  if (!sidebar || !toggle || !backdrop) return;
+
+  function openSidebar() {
+    sidebar.classList.add('open');
+    backdrop.classList.add('open');
+  }
+  function closeSidebar() {
+    sidebar.classList.remove('open');
+    backdrop.classList.remove('open');
+  }
+
+  toggle.addEventListener('click', function () {
+    if (sidebar.classList.contains('open')) {
+      closeSidebar();
+    } else {
+      openSidebar();
+    }
+  });
+  backdrop.addEventListener('click', closeSidebar);
+  sidebar.addEventListener('click', function (e) {
+    if (e.target.closest('a.sb-item')) closeSidebar();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeSidebar();
+  });
+})();

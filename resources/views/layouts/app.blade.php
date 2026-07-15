@@ -63,11 +63,12 @@
     </nav>
     <div class="sb-foot">&copy; {{ date('Y') }} PROMIS &middot; v2.0</div>
   </aside>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
   <main class="main">
     <div class="topbar">
       <div style="display:flex;align-items:center;gap:10px">
-        <button type="button" class="mobile-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">
+        <button type="button" class="mobile-toggle" id="sidebarToggle" aria-label="Buka menu">
           <i class="bi bi-list"></i>
         </button>
         <div>
