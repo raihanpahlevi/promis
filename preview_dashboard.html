@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard | PROMIS — Preview Desain Baru</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --brand-900:#3E2723;
+  --brand-700:#4E342E;
+  --brand-500:#6F4E37;
+  --brand-400:#8D6748;
+  --brand-300:#A47148;
+  --brand-100:#E7D6C8;
+  --brand-50:#F5EFE6;
+  --cream:#FAF7F2;
+  --ok:#2E7D32;
+  --ok-bg:#E8F5E9;
+  --danger:#C62828;
+  --danger-bg:#FDECEA;
+  --warn:#B26A00;
+  --warn-bg:#FFF3E0;
+  --info:#1565C0;
+  --info-bg:#E3F2FD;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;font-family:'Inter',sans-serif;background:var(--cream);color:var(--brand-900);
+}
+.app{display:flex;min-height:100vh}
+
+.sidebar{
+  width:250px;flex-shrink:0;
+  background:linear-gradient(180deg,var(--brand-900),#2A1815);
+  color:#fff;display:flex;flex-direction:column;
+  position:sticky;top:0;height:100vh;
+}
+.sb-brand{display:flex;align-items:center;gap:10px;padding:22px 20px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sb-brand .box{width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-weight:800}
+.sb-brand span{font-weight:700;font-size:17px}
+.sb-nav{flex:1;padding:16px 12px;overflow-y:auto}
+.sb-group{font-size:10.5px;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.4);margin:16px 10px 8px}
+.sb-item{
+  display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;
+  color:rgba(255,255,255,.75);text-decoration:none;font-size:13.5px;font-weight:500;
+  margin-bottom:2px;cursor:pointer;
+}
+.sb-item i{font-size:16px;width:18px;text-align:center}
+.sb-item:hover{background:rgba(255,255,255,.06);color:#fff}
+.sb-item.active{background:rgba(255,255,255,.14);color:#fff}
+.sb-foot{padding:14px 20px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:rgba(255,255,255,.4)}
+
+.main{flex:1;min-width:0}
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 28px;background:#fff;border-bottom:1px solid var(--brand-100);
+  position:sticky;top:0;z-index:5;
+}
+.topbar h1{font-size:18px;font-weight:700;margin:0}
+.topbar .path{font-size:12px;color:#8A6B55;margin-top:2px}
+.top-right{display:flex;align-items:center;gap:14px}
+.kantor-chip{
+  background:var(--brand-50);color:var(--brand-700);font-size:12px;font-weight:600;
+  padding:6px 12px;border-radius:999px;display:flex;align-items:center;gap:6px;
+}
+.user-chip{display:flex;align-items:center;gap:10px;padding:4px 10px 4px 4px;border-radius:999px;background:var(--brand-50)}
+.user-chip .av{width:32px;height:32px;border-radius:50%;background:var(--brand-500);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700}
+.user-chip .meta{line-height:1.2}
+.user-chip .meta b{font-size:12.5px;display:block}
+.user-chip .meta small{font-size:10.5px;color:#8A6B55}
+
+.content{padding:24px 28px}
+
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}
+.stat-card{
+  background:#fff;border:1px solid var(--brand-100);border-radius:16px;padding:18px 20px;
+  display:flex;flex-direction:column;gap:10px;
+}
+.stat-card .top{display:flex;align-items:center;justify-content:space-between}
+.stat-card .icon{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:17px}
+.stat-card .trend{font-size:11.5px;font-weight:700;display:flex;align-items:center;gap:3px}
+.stat-card .num{font-size:26px;font-weight:800}
+.stat-card .lbl{font-size:12.5px;color:#8A6B55;font-weight:500}
+.ic-brown{background:var(--brand-50);color:var(--brand-700)}
+.ic-green{background:var(--ok-bg);color:var(--ok)}
+.ic-red{background:var(--danger-bg);color:var(--danger)}
+.ic-blue{background:var(--info-bg);color:var(--info)}
+
+.grid-2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-bottom:22px}
+.panel{background:#fff;border:1px solid var(--brand-100);border-radius:16px;padding:20px}
+.panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.panel-head h3{font-size:14.5px;font-weight:700;margin:0}
+.panel-head .filters{display:flex;gap:8px}
+.filters select{
+  font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--brand-100);color:var(--brand-700);background:var(--brand-50);
+}
+.legend-row{display:flex;gap:16px;margin-top:14px;font-size:12px}
+.legend-row span{display:flex;align-items:center;gap:6px;color:#8A6B55}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+
+.mini-list{display:flex;flex-direction:column;gap:12px}
+.mini-item{display:flex;align-items:center;gap:12px}
+.mini-item .av{width:34px;height:34px;border-radius:10px;background:var(--brand-50);color:var(--brand-700);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
+.mini-item .txt{flex:1;line-height:1.3}
+.mini-item .txt b{font-size:13px;display:block}
+.mini-item .txt small{font-size:11.5px;color:#8A6B55}
+.mini-item .badge{font-size:10.5px;font-weight:700;padding:4px 9px;border-radius:999px}
+
+.table-panel{background:#fff;border:1px solid var(--brand-100);border-radius:16px;padding:20px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{
+  text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;
+  color:#8A6B55;padding:10px 12px;border-bottom:1px solid var(--brand-100);font-weight:700;
+}
+tbody td{padding:12px;border-bottom:1px solid #F3ECE4;color:var(--brand-900)}
+tbody tr:hover{background:var(--brand-50)}
+.badge{font-size:11px;font-weight:700;padding:5px 10px;border-radius:999px;display:inline-block}
+.badge-ok{background:var(--ok-bg);color:var(--ok)}
+.badge-no{background:var(--danger-bg);color:var(--danger)}
+.badge-pending{background:var(--warn-bg);color:var(--warn)}
+.search-box{display:flex;align-items:center;gap:8px;background:var(--brand-50);border-radius:10px;padding:8px 12px;width:240px}
+.search-box input{border:none;background:transparent;outline:none;font-size:12.5px;width:100%;color:var(--brand-900)}
+.search-box i{color:var(--brand-400)}
+
+@media (max-width:1100px){
+  .stat-grid{grid-template-columns:repeat(2,1fr)}
+  .grid-2{grid-template-columns:1fr}
+}
+@media (max-width:760px){
+  .sidebar{position:fixed;left:-260px;transition:left .2s;z-index:20}
+  .sidebar.open{left:0}
+  .stat-grid{grid-template-columns:1fr}
+  .topbar{padding:12px 16px}
+  .content{padding:16px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-brand"><div class="box">P</div><span>PROMIS</span></div>
+    <nav class="sb-nav">
+      <div class="sb-group">Utama</div>
+      <a class="sb-item active"><i class="bi bi-grid-1x2"></i> Dashboard</a>
+      <a class="sb-item"><i class="bi bi-geo-alt"></i> Data POI</a>
+      <a class="sb-item"><i class="bi bi-journal-check"></i> Kunjungan</a>
+      <a class="sb-item"><i class="bi bi-people"></i> Leads</a>
+      <div class="sb-group">Laporan</div>
+      <a class="sb-item"><i class="bi bi-bar-chart"></i> Rekap Sales</a>
+      <a class="sb-item"><i class="bi bi-download"></i> Export Data</a>
+      <div class="sb-group">Admin</div>
+      <a class="sb-item"><i class="bi bi-person-gear"></i> Kelola User</a>
+      <a class="sb-item"><i class="bi bi-gear"></i> Pengaturan</a>
+    </nav>
+    <div class="sb-foot">© 2026 PROMIS · v2.0</div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <h1>Dashboard</h1>
+        <div class="path">Beranda / Ringkasan</div>
+      </div>
+      <div class="top-right">
+        <div class="kantor-chip"><i class="bi bi-building"></i> KC Bogor Raya</div>
+        <div class="user-chip">
+          <div class="av">RP</div>
+          <div class="meta"><b>Raihan P.</b><small>Admin Cabang</small></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="top"><div class="icon ic-brown"><i class="bi bi-geo-alt-fill"></i></div><span class="trend" style="color:var(--ok)"><i class="bi bi-arrow-up-right"></i>4.2%</span></div>
+          <div class="num">1.284</div>
+          <div class="lbl">Total POI terdaftar</div>
+        </div>
+        <div class="stat-card">
+          <div class="top"><div class="icon ic-green"><i class="bi bi-patch-check-fill"></i></div><span class="trend" style="color:var(--ok)"><i class="bi bi-arrow-up-right"></i>2.1%</span></div>
+          <div class="num">892</div>
+          <div class="lbl">Mitra BNI aktif</div>
+        </div>
+        <div class="stat-card">
+          <div class="top"><div class="icon ic-red"><i class="bi bi-x-octagon-fill"></i></div><span class="trend" style="color:var(--danger)"><i class="bi bi-arrow-down-right"></i>1.4%</span></div>
+          <div class="num">392</div>
+          <div class="lbl">Non BNI</div>
+        </div>
+        <div class="stat-card">
+          <div class="top"><div class="icon ic-blue"><i class="bi bi-journal-check"></i></div><span class="trend" style="color:var(--ok)"><i class="bi bi-arrow-up-right"></i>8.7%</span></div>
+          <div class="num">47</div>
+          <div class="lbl">Kunjungan hari ini</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head">
+            <h3>Tren kunjungan & closing</h3>
+            <div class="filters">
+              <select><option>7 hari terakhir</option><option>30 hari terakhir</option></select>
+            </div>
+          </div>
+          <canvas id="trendChart" height="110"></canvas>
+          <div class="legend-row">
+            <span><i class="dot" style="background:var(--brand-500)"></i>Kunjungan</span>
+            <span><i class="dot" style="background:var(--ok)"></i>Closing</span>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Top sales bulan ini</h3></div>
+          <div class="mini-list">
+            <div class="mini-item"><div class="av">DA</div><div class="txt"><b>Dewi Anggraini</b><small>KC Bogor · 18 closing</small></div><span class="badge badge-ok">98%</span></div>
+            <div class="mini-item"><div class="av">RS</div><div class="txt"><b>Rian Saputra</b><small>KC Depok · 15 closing</small></div><span class="badge badge-ok">91%</span></div>
+            <div class="mini-item"><div class="av">FN</div><div class="txt"><b>Fitri Nuraini</b><small>KC Cibinong · 12 closing</small></div><span class="badge badge-pending">76%</span></div>
+            <div class="mini-item"><div class="av">MY</div><div class="txt"><b>M. Yusuf</b><small>KC Bogor · 9 closing</small></div><span class="badge badge-pending">64%</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-panel">
+        <div class="panel-head">
+          <h3>Kunjungan terbaru</h3>
+          <div class="search-box"><i class="bi bi-search"></i><input placeholder="Cari POI atau sales..."></div>
+        </div>
+        <table>
+          <thead><tr><th>Tanggal</th><th>POI</th><th>Sales</th><th>Kantor</th><th>Hasil</th></tr></thead>
+          <tbody>
+            <tr><td>13 Jul 2026</td><td>Toko Sinar Jaya</td><td>Dewi Anggraini</td><td>KC Bogor</td><td><span class="badge badge-ok">Closing</span></td></tr>
+            <tr><td>13 Jul 2026</td><td>Warung Makan Berkah</td><td>Rian Saputra</td><td>KC Depok</td><td><span class="badge badge-pending">Follow up</span></td></tr>
+            <tr><td>12 Jul 2026</td><td>Apotek Sehat</td><td>Fitri Nuraini</td><td>KC Cibinong</td><td><span class="badge badge-no">Tidak tertarik</span></td></tr>
+            <tr><td>12 Jul 2026</td><td>Bengkel Motor Jaya</td><td>M. Yusuf</td><td>KC Bogor</td><td><span class="badge badge-ok">Closing</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+const ctx = document.getElementById('trendChart');
+new Chart(ctx,{
+  type:'line',
+  data:{
+    labels:['7 Jul','8 Jul','9 Jul','10 Jul','11 Jul','12 Jul','13 Jul'],
+    datasets:[
+      {label:'Kunjungan',data:[32,41,38,45,50,47,54],borderColor:'#6F4E37',backgroundColor:'rgba(111,78,55,.08)',tension:.35,fill:true},
+      {label:'Closing',data:[10,14,12,18,20,17,22],borderColor:'#2E7D32',backgroundColor:'rgba(46,125,50,.08)',tension:.35,fill:true}
+    ]
+  },
+  options:{
+    plugins:{legend:{display:false}},
+    scales:{
+      x:{grid:{display:false}},
+      y:{grid:{color:'#F3ECE4'}}
+    }
+  }
+});
+</script>
+</body>
+</html>
