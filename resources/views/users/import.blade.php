@@ -11,16 +11,6 @@
       <div class="form-error">{{ $errors->first() }}</div>
     @endif
 
-    <p style="font-size:13px;color:#8A6B55;line-height:1.6">
-      Unggah file Excel dengan kolom NPP, Nama Lengkap, Unit / Jabatan, Role Sistem, Kantor (boleh 1
-      sheet saja, tidak wajib pakai template resmi). Semua kolom <b>wajib diisi kecuali Unit / Jabatan</b>.
-      <b>Role Sistem</b> harus salah satu: admin / admin_final / sales. <b>Kantor</b> harus sama dengan
-      nama kantor di master data (pisahkan koma kalau lebih dari satu) &mdash; kalau <b>Unit / Jabatan</b>
-      diisi tapi belum ada di master unit, otomatis dibuatkan unit barunya. Password awal setiap user =
-      NPP-nya sendiri dan wajib diganti saat login pertama. Baris yang tidak valid akan ditolak dengan
-      alasan spesifik &mdash; baris lain yang valid tetap diimport.
-    </p>
-
     <a href="{{ route('user.import.template') }}" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--brand-500);text-decoration:none;margin-bottom:18px">
       <i class="bi bi-download"></i> Unduh template kosong (Template_Import_User_PROMIS.xlsx)
     </a>

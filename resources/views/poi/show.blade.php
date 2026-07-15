@@ -20,7 +20,18 @@
       @endif
 
       <div class="detail-ledger">
-        <div class="detail-row"><span>Alamat</span><span>{{ $poi->alamat }}</span></div>
+        <div class="detail-row">
+          <span>Alamat</span>
+          <span>
+            @if ($poi->alamat)
+              <a class="addr-link" href="https://www.google.com/maps/search/?api=1&query={{ urlencode($poi->alamat) }}" target="_blank" rel="noopener noreferrer" title="Buka di Google Maps">
+                <i class="bi bi-geo-alt"></i>{{ $poi->alamat }}
+              </a>
+            @else
+              -
+            @endif
+          </span>
+        </div>
         <div class="detail-row"><span>Kantor</span><span>{{ $poi->kantor->nama ?? '-' }}</span></div>
         <div class="detail-row"><span>Sektor</span><span>{{ $poi->sektor }}</span></div>
         <div class="detail-row"><span>Sub Sektor</span><span>{{ $poi->sub_sektor ?? '-' }}</span></div>

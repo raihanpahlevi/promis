@@ -92,7 +92,16 @@
           <tbody>
             @foreach ($pois as $poi)
               <tr>
-                <td><b>{{ $poi->nama_poi }}</b><br><small style="color:#8A6B55">{{ \Illuminate\Support\Str::limit($poi->alamat, 50) }}</small></td>
+                <td>
+                  <b>{{ $poi->nama_poi }}</b><br>
+                  @if ($poi->alamat)
+                    <a class="addr-link" href="https://www.google.com/maps/search/?api=1&query={{ urlencode($poi->alamat) }}" target="_blank" rel="noopener noreferrer" title="Buka di Google Maps">
+                      <i class="bi bi-geo-alt"></i>{{ \Illuminate\Support\Str::limit($poi->alamat, 50) }}
+                    </a>
+                  @else
+                    <small style="color:#8A6B55">-</small>
+                  @endif
+                </td>
                 <td>{{ $poi->kantor->nama ?? '-' }}</td>
                 <td>{{ $poi->sektor }}</td>
                 <td>{{ $poi->area ?? '-' }}</td>

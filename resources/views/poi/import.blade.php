@@ -11,19 +11,6 @@
       <div class="form-error">{{ $errors->first() }}</div>
     @endif
 
-    <p style="font-size:13px;color:#8A6B55;line-height:1.6">
-      Unggah file Excel dengan kolom Nama, Alamat, Sektor, Sub Sektor, Area, Outlet, Bank, PIC (boleh 1 sheet
-      saja, tidak wajib pakai template resmi). Kolom <b>Outlet</b> cuma boleh kosong &mdash; itu satu-satunya
-      alasan baris ditolak.
-      @if (auth()->user()->isAdmin())
-        Kalau nama kantornya belum ada di master data, otomatis dibuatkan.
-      @else
-        Nama kantor harus salah satu dari kantor yang Anda kelola.
-      @endif
-      Sektor/Area/Bank yang tidak cocok daftar baku tetap masuk dengan nilai default aman ("Lainnya" / kosong /
-      "Bukan Nasabah BNI"), tinggal dikoreksi lewat halaman edit POI kalau perlu.
-    </p>
-
     <a href="{{ route('poi.import.template') }}" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--brand-500);text-decoration:none;margin-bottom:18px">
       <i class="bi bi-download"></i> Unduh template kosong (Template_Import_POI_PROMIS.xlsx)
     </a>

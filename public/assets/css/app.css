@@ -192,6 +192,11 @@ tbody tr:hover{background:var(--brand-50)}
 .badge-ok{background:var(--ok-bg);color:var(--ok)}
 .badge-no{background:var(--danger-bg);color:var(--danger)}
 .badge-pending{background:var(--warn-bg);color:var(--warn)}
+.addr-link{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:#8A6B55;text-decoration:none;transition:color .15s ease}
+.addr-link i{font-size:12px;color:var(--brand-400)}
+.addr-link:hover{color:var(--brand-500);text-decoration:underline}
+.addr-link:hover i{color:var(--brand-500)}
+
 .search-box{display:flex;align-items:center;gap:8px;background:var(--brand-50);border-radius:10px;padding:8px 12px;width:240px}
 .search-box input{border:none;background:transparent;outline:none;font-size:12.5px;width:100%;color:var(--brand-900)}
 .search-box i{color:var(--brand-400)}
