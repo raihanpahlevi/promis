@@ -73,9 +73,9 @@
 
   <div class="grid-3">
     <div class="panel">
-      <div class="panel-head"><h3>Top Area (Ring 1&ndash;3)</h3></div>
+      <div class="panel-head"><h3>Top Area (Ring 1&ndash;4)</h3></div>
       @foreach ($area['all'] as $key => $a)
-        @php($rcls = match($key) { 'Ring 1 (0 - 1 Km)' => 'r1', 'Ring 2 (>1 - 3 Km)' => 'r2', default => 'r3' })
+        @php($rcls = match($key) { 'Ring 1 (0 - 1 Km)' => 'r1', 'Ring 2 (>1 - 3 Km)' => 'r2', 'Ring 3 (>3 - 5 Km)' => 'r3', default => 'r4' })
         <div class="area-label {{ $rcls }}">
           <span>{{ $a['label'] }}</span>
           <span class="muted">{{ number_format($a['total']) }} ({{ $a['persen'] }}%)</span>
@@ -89,7 +89,7 @@
     <div class="panel">
       <div class="panel-head"><h3>Top Area &ndash; BNI</h3></div>
       @foreach ($area['bni'] as $key => $a)
-        @php($rcls = match($key) { 'Ring 1 (0 - 1 Km)' => 'r1', 'Ring 2 (>1 - 3 Km)' => 'r2', default => 'r3' })
+        @php($rcls = match($key) { 'Ring 1 (0 - 1 Km)' => 'r1', 'Ring 2 (>1 - 3 Km)' => 'r2', 'Ring 3 (>3 - 5 Km)' => 'r3', default => 'r4' })
         <div class="area-label {{ $rcls }}">
           <span>{{ $a['label'] }}</span>
           <span class="muted">{{ number_format($a['total']) }} ({{ $a['persen'] }}%)</span>
@@ -103,7 +103,7 @@
     <div class="panel">
       <div class="panel-head"><h3>Top Area &ndash; Non BNI</h3></div>
       @foreach ($area['non'] as $key => $a)
-        @php($rcls = match($key) { 'Ring 1 (0 - 1 Km)' => 'r1', 'Ring 2 (>1 - 3 Km)' => 'r2', default => 'r3' })
+        @php($rcls = match($key) { 'Ring 1 (0 - 1 Km)' => 'r1', 'Ring 2 (>1 - 3 Km)' => 'r2', 'Ring 3 (>3 - 5 Km)' => 'r3', default => 'r4' })
         <div class="area-label {{ $rcls }}">
           <span>{{ $a['label'] }}</span>
           <span class="muted">{{ number_format($a['total']) }} ({{ $a['persen'] }}%)</span>

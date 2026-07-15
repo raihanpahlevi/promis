@@ -2,7 +2,7 @@
   $selectStyle = 'width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--brand-100);font-size:14px;background:#fff;color:var(--brand-900);outline:none;appearance:none';
   $old = fn ($key, $default = null) => old($key, $user->{$key} ?? $default);
   $oldKantorIds = old('kantor_ids', $user ? $user->kantor->pluck('id')->all() : []);
-  $oldUnitId = old('unit_id', $user->unit_id ?? null);
+  $oldUnitName = old('unit_name', $user->unit->nama ?? null);
 @endphp
 
 @if (! $user)
@@ -35,14 +35,17 @@
 
 <div class="field">
   <label>
-    Unit / Jabatan <small style="font-weight:400;color:#8A6B55">(opsional &mdash; cuma ditampilkan, tidak mempengaruhi hak akses. Kelola daftar unit di menu Pengaturan)</small>
+    Unit / Jabatan <small style="font-weight:400;color:#8A6B55">(opsional &mdash; cuma ditampilkan, tidak mempengaruhi hak akses. Pilih dari daftar atau ketik nama baru &mdash; otomatis masuk ke daftar)</small>
   </label>
-  <select name="unit_id" style="{{ $selectStyle }}">
-    <option value="">&mdash; Tidak diisi &mdash;</option>
+  <div class="input-wrap">
+    <i class="bi bi-briefcase leading"></i>
+    <input type="text" name="unit_name" list="unitSuggestions" value="{{ $oldUnitName }}" placeholder="Contoh: Sales Kredit">
+  </div>
+  <datalist id="unitSuggestions">
     @foreach ($unitOptions as $unit)
-      <option value="{{ $unit->id }}" @selected((string) $oldUnitId === (string) $unit->id)>{{ $unit->nama }}</option>
+      <option value="{{ $unit->nama }}"></option>
     @endforeach
-  </select>
+  </datalist>
 </div>
 
 <div class="field">

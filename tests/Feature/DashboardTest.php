@@ -168,13 +168,13 @@ class DashboardTest extends TestCase
         $response->assertViewHas('totals', fn ($totals) => $totals['total_poi'] === 1);
     }
 
-    public function test_area_breakdown_shares_the_same_ring1to3_denominator_across_variants(): void
+    public function test_area_breakdown_shares_the_same_ring1to4_denominator_across_variants(): void
     {
         $kantor = Kantor::create(['kode' => 'K1', 'nama' => 'Kantor Satu']);
         $ring1 = Poi::AREA_OPTIONS[0];
         $ring2 = Poi::AREA_OPTIONS[1];
         $ring4 = Poi::AREA_OPTIONS[3];
-        // Ring 1: 2 POI (1 BNI, 1 Non); Ring 2: 1 POI (BNI); Ring 4 excluded entirely.
+        // Ring 1: 2 POI (1 BNI, 1 Non); Ring 2: 1 POI (BNI); Ring 4: 1 POI (Non) — all included.
         $this->poi($kantor, ['area' => $ring1, 'status_mitra' => 'Nasabah Merchant BNI']);
         $this->poi($kantor, ['area' => $ring1, 'status_mitra' => 'Bukan Nasabah BNI']);
         $this->poi($kantor, ['area' => $ring2, 'status_mitra' => 'Nasabah Non Merchant BNI']);
@@ -184,15 +184,17 @@ class DashboardTest extends TestCase
         $response = $this->actingAs($admin)->get('/dashboard?kantor='.$kantor->id);
 
         $response->assertOk();
-        $response->assertViewHas('area', function ($area) use ($ring1, $ring2) {
-            // total_r123 = 3 (Ring 4 excluded) — every variant divides by that same 3.
+        $response->assertViewHas('area', function ($area) use ($ring1, $ring2, $ring4) {
+            // total_rings = 4 — every variant divides by that same 4.
             return $area['all'][$ring1]['total'] === 2
-                && $area['all'][$ring1]['persen'] === 66.7
+                && $area['all'][$ring1]['persen'] === 50.0
                 && $area['all'][$ring2]['total'] === 1
+                && $area['all'][$ring4]['total'] === 1
+                && $area['all'][$ring4]['persen'] === 25.0
                 && $area['bni'][$ring1]['total'] === 1
-                && $area['bni'][$ring1]['persen'] === 33.3
+                && $area['bni'][$ring1]['persen'] === 25.0
                 && $area['non'][$ring1]['total'] === 1
-                && $area['non'][$ring1]['persen'] === 33.3;
+                && $area['non'][$ring1]['persen'] === 25.0;
         });
     }
 

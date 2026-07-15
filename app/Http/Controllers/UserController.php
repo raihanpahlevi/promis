@@ -82,7 +82,7 @@ class UserController extends Controller
             $user = User::create([
                 'npp' => $data['npp'],
                 'nama_lengkap' => $data['nama_lengkap'],
-                'unit_id' => $data['unit_id'] ?? null,
+                'unit_id' => $this->resolveUnitId($data['unit_name'] ?? null),
                 'password' => $data['npp'], // hashed via User's 'hashed' cast
                 'role' => $data['role'],
                 'force_password_change' => true,
@@ -134,7 +134,7 @@ class UserController extends Controller
         DB::transaction(function () use ($user, $data) {
             $user->update([
                 'nama_lengkap' => $data['nama_lengkap'],
-                'unit_id' => $data['unit_id'] ?? null,
+                'unit_id' => $this->resolveUnitId($data['unit_name'] ?? null),
                 'role' => $data['role'],
             ]);
 
@@ -199,6 +199,28 @@ class UserController extends Controller
     }
 
     /**
+     * The Unit / Jabatan field is a free-text input with a suggestion list
+     * (not a closed dropdown): typing a name that matches an existing unit
+     * (case/whitespace-insensitive) reuses it, typing a new name auto-creates
+     * it — same "resolve or create" behavior as UserImport::resolveOrCreateUnit(),
+     * so manual entry and bulk import stay consistent.
+     */
+    private function resolveUnitId(?string $rawName): ?int
+    {
+        $rawName = trim((string) $rawName);
+
+        if ($rawName === '') {
+            return null;
+        }
+
+        $normalized = mb_strtoupper(preg_replace('/\s+/', ' ', $rawName));
+
+        $unit = Unit::whereRaw('UPPER(TRIM(nama)) = ?', [$normalized])->first();
+
+        return $unit?->id ?? Unit::create(['nama' => $rawName, 'is_active' => true])->id;
+    }
+
+    /**
      * @return string[]
      */
     private function roleOptions(): array
@@ -219,7 +241,7 @@ class UserController extends Controller
     {
         $rules = [
             'nama_lengkap' => ['required', 'string', 'max:255'],
-            'unit_id' => ['nullable', 'integer', Rule::exists('unit', 'id')],
+            'unit_name' => ['nullable', 'string', 'max:255'],
             'role' => ['required', Rule::in($this->roleOptions())],
             // Rule::requiredIf (not 'nullable' + a closure) on purpose: a
             // plain closure rule is silently skipped by Laravel's validator

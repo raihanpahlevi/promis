@@ -136,7 +136,7 @@ class UserTest extends TestCase
         $response = $this->actingAs($admin)->post('/user', [
             'npp' => '5551234',
             'nama_lengkap' => 'User Baru',
-            'unit_id' => $unit->id,
+            'unit_name' => $unit->nama,
             'role' => User::ROLE_SALES,
             'kantor_ids' => [$kantor->id],
         ]);
@@ -151,6 +151,42 @@ class UserTest extends TestCase
         $this->assertSame(User::ROLE_SALES, $user->role);
         $this->assertSame($unit->id, $user->unit_id);
         $this->assertTrue($user->hasKantor($kantor->id));
+    }
+
+    public function test_admin_can_type_a_new_unit_name_and_it_is_auto_created_and_reused(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $kantor = Kantor::create(['kode' => 'X', 'nama' => 'Kantor X']);
+
+        $response = $this->actingAs($admin)->post('/user', [
+            'npp' => '5551235',
+            'nama_lengkap' => 'User Baru Dua',
+            'unit_name' => 'Kepala Cabang Baru',
+            'role' => User::ROLE_SALES,
+            'kantor_ids' => [$kantor->id],
+        ]);
+
+        $response->assertRedirect(route('user.index'));
+
+        $unit = Unit::where('nama', 'Kepala Cabang Baru')->first();
+        $this->assertNotNull($unit, 'typing a new unit name should auto-create it');
+        $this->assertTrue($unit->is_active);
+
+        $user = User::where('npp', '5551235')->first();
+        $this->assertSame($unit->id, $user->unit_id);
+
+        // Typing the same name again (different case/spacing) reuses the unit, doesn't duplicate it.
+        $this->actingAs($admin)->post('/user', [
+            'npp' => '5551236',
+            'nama_lengkap' => 'User Baru Tiga',
+            'unit_name' => '  kepala   cabang baru ',
+            'role' => User::ROLE_SALES,
+            'kantor_ids' => [$kantor->id],
+        ]);
+
+        $this->assertSame(1, Unit::where('nama', 'Kepala Cabang Baru')->count());
+        $userThree = User::where('npp', '5551236')->first();
+        $this->assertSame($unit->id, $userThree->unit_id);
     }
 
     public function test_create_rejects_duplicate_npp(): void
@@ -214,7 +250,7 @@ class UserTest extends TestCase
         $response = $this->actingAs($admin)->put("/user/{$user->id}", [
             'npp' => '0000000', // must be ignored — npp is not editable
             'nama_lengkap' => 'Nama Diubah',
-            'unit_id' => $unit->id,
+            'unit_name' => $unit->nama,
             'role' => User::ROLE_ADMIN_FINAL,
             'kantor_ids' => [$kantorNew->id],
         ]);

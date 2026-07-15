@@ -24,11 +24,9 @@ use Illuminate\View\View;
  *  - "BNI" is a binary bucket = Nasabah Non Merchant BNI + Nasabah Merchant
  *    BNI; "Bank Lain"/Non = Bukan Nasabah BNI. status_mitra itself is a
  *    3-value ENUM in this schema, unlike v1's raw 'BNI' string compare.
- *  - Top Area only ever shows the 3 closest rings (Ring 1-3, excluding
- *    Ring 4 — the farthest/lowest-priority bucket), matching v1's
- *    R1/R2/R3-only grouping. Area labels themselves (Poi::AREA_OPTIONS) are
- *    "Ring N (jarak km)" strings, product decision 2026-07-14 — not the
- *    schema's old bare "RING 1".."RING 5".
+ *  - Top Area shows all 4 rings (Ring 1-4). Area labels themselves
+ *    (Poi::AREA_OPTIONS) are "Ring N (jarak km)" strings, product decision
+ *    2026-07-14 — not the schema's old bare "RING 1".."RING 5".
  *  - Top Area BNI/Non both divide by the *all-status* Ring 1-3 total, not
  *    their own status-filtered subtotal — so the three area panels don't
  *    each sum to 100% on their own. That's the original's math, kept as-is.
@@ -46,7 +44,7 @@ use Illuminate\View\View;
  */
 class DashboardController extends Controller
 {
-    private const RING_LEVELS = ['Ring 1 (0 - 1 Km)', 'Ring 2 (>1 - 3 Km)', 'Ring 3 (>3 - 5 Km)'];
+    private const RING_LEVELS = ['Ring 1 (0 - 1 Km)', 'Ring 2 (>1 - 3 Km)', 'Ring 3 (>3 - 5 Km)', 'Ring 4 (> 5 Km)'];
 
     private const BNI_STATUSES = ['Nasabah Non Merchant BNI', 'Nasabah Merchant BNI'];
 
@@ -231,8 +229,8 @@ class DashboardController extends Controller
     }
 
     /**
-     * Ring 1-3 only (see class docblock). All three variants (all/bni/non)
-     * divide by the same all-status Ring 1-3 total — preserved from v1 as-is.
+     * All 4 rings. All three variants (all/bni/non) divide by the same
+     * all-status ring total — preserved from v1 as-is.
      */
     private function areaBreakdown(array $kantorIds): array
     {
@@ -242,7 +240,7 @@ class DashboardController extends Controller
             ->whereIn('area', self::RING_LEVELS);
 
         $all = $base()->select('area', DB::raw('count(*) as total'))->groupBy('area')->pluck('total', 'area');
-        $totalR123 = (int) $all->sum();
+        $totalRings = (int) $all->sum();
 
         $bni = $base()->whereIn('status_mitra', self::BNI_STATUSES)
             ->select('area', DB::raw('count(*) as total'))->groupBy('area')->pluck('total', 'area');
@@ -250,14 +248,14 @@ class DashboardController extends Controller
         $non = $base()->where('status_mitra', self::BUKAN_NASABAH)
             ->select('area', DB::raw('count(*) as total'))->groupBy('area')->pluck('total', 'area');
 
-        $build = function (Collection $counts) use ($totalR123) {
+        $build = function (Collection $counts) use ($totalRings) {
             $out = [];
             foreach (self::RING_LEVELS as $ring) {
                 $total = (int) ($counts[$ring] ?? 0);
                 $out[$ring] = [
                     'label' => $ring,
                     'total' => $total,
-                    'persen' => $totalR123 > 0 ? round($total / $totalR123 * 100, 1) : 0,
+                    'persen' => $totalRings > 0 ? round($total / $totalRings * 100, 1) : 0,
                 ];
             }
 

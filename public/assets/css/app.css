@@ -209,6 +209,7 @@ tbody tr:hover{background:var(--brand-50)}
 .area-label.r1 span:first-child{color:#1E40AF}
 .area-label.r2 span:first-child{color:#166534}
 .area-label.r3 span:first-child{color:#6D28D9}
+.area-label.r4 span:first-child{color:#B45309}
 .area-bar-container{position:relative;width:100%;height:12px;background:var(--brand-50);border-radius:999px;overflow:hidden;margin-bottom:14px}
 .area-bar-fill{position:absolute;inset:0 auto 0 0;height:100%;transition:width .3s ease}
 .area-bar-fill.pct-low{background:linear-gradient(135deg,#B71C1C,#E53935)}
