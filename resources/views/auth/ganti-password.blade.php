@@ -6,7 +6,7 @@
 <title>Ganti Password | PROMIS</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-<link href="{{ asset('assets/css/app.css') }}" rel="stylesheet">
+<link href="{{ asset('assets/css/app.css') }}?v={{ filemtime(public_path('assets/css/app.css')) }}" rel="stylesheet">
 </head>
 <body>
 <div class="right" style="min-height:100vh">
