@@ -9,6 +9,9 @@
       <h3>Daftar POI</h3>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         @if ($canManage)
+          <a href="{{ route('export.poi.download', array_filter($filters ?? [])) }}" class="btn-primary-custom" style="text-decoration:none;background:transparent;color:var(--brand-700);border:1.5px solid var(--brand-100);padding:9px 16px">
+            <i class="bi bi-file-earmark-excel"></i> Export Excel
+          </a>
           <a href="{{ route('poi.import.create') }}" class="btn-primary-custom" style="text-decoration:none;background:transparent;color:var(--brand-700);border:1.5px solid var(--brand-100);padding:9px 16px">
             <i class="bi bi-upload"></i> Import Excel
           </a>

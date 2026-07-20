@@ -21,7 +21,9 @@ use Throwable;
 /**
  * Bulk import for POI. Columns (heading row -> snake_case key): Nama, Alamat,
  * Sektor, Sub Sektor, Area, Outlet, Bank, PIC -> nama, alamat, sektor,
- * sub_sektor, area, outlet, bank, pic.
+ * sub_sektor, area, outlet, bank, pic. An optional leading ID column (only
+ * present in files produced by PoiExport) switches a row from insert to
+ * update — see "ID-based upsert" below.
  *
  * Deliberately lenient by design (explicit product decision, 2026-07-14):
  * **Outlet is the only field that can reject a row, and only when it's
@@ -62,6 +64,36 @@ use Throwable;
  * sub_sektor additionally treats a literal "nan" as blank (cleanSubSektor())
  * — a common artifact of blank cells round-tripping through pandas/NaN-aware
  * tooling before landing back in Excel/CSV.
+ *
+ * ID-based upsert (2026-07-16): the real workflow is "export POI to Excel,
+ * fill in the columns that came back blank, import the same file again" —
+ * without a way to recognize "this row already exists", every re-import
+ * would insert a brand-new duplicate POI instead of completing the one
+ * that's already there (this exact failure mode caused a real 11.5k-row
+ * duplicate incident before ID-based matching existed). PoiExport's first
+ * column is "ID" (the poi.id primary key); when a row's ID cell is
+ * non-blank, model() fetches and updates that existing Poi instead of
+ * creating a new one — Eloquent's save() does an UPDATE automatically for an
+ * already-`exists`-true model, so this still goes through PoiObserver just
+ * like every other write here.
+ *
+ * Update semantics are deliberately NOT the same as insert's "safe default"
+ * fallbacks: a blank cell on an update row means "leave this field alone"
+ * (that's the entire point — filling in gaps without clobbering whatever's
+ * already correct), never "clear it" and never the insert-time placeholder
+ * ('-' / 'Lainnya' / Poi::BELUM_BERMITRA_BNI). Only Outlet stays
+ * unconditionally required and always drives kantor_id (on both insert and
+ * update) — an update row can reassign a POI's kantor by changing Outlet,
+ * same as PoiController::update() already allows via the manual edit form.
+ * An unrecognized (non-blank) Bank value on an update row is also just
+ * ignored (kept as-is) rather than falling back to Poi::BELUM_BERMITRA_BNI —
+ * that fallback exists to keep a brand-new row prospectable, not to risk
+ * silently downgrading an already-partnered POI's status_mitra from a typo
+ * in the reimport file.
+ *
+ * rules()'s `id` check (existence + admin_final kantor-ownership of the
+ * row's *current* kantor_id) reuses the same Poi instance model() goes on to
+ * update (see $poiCache) — one fetch per ID-bearing row, not two.
  *
  * Deliberately NOT using WithBatchInserts: with it, ModelManager::massFlush()
  * bypasses Eloquent (raw ->insert()/upsert()), which would silently skip
@@ -108,6 +140,9 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
     /** @var int[]|null kantor ids the acting user may import into; null = unrestricted (admin) */
     private ?array $allowedKantorIds;
 
+    /** @var array<int, Poi|false> memoized Poi::find() by id — shared between rules()'s id check and model()'s update, false = confirmed not found */
+    private array $poiCache = [];
+
     private int $importedCount = 0;
 
     /** @var Throwable[] */
@@ -138,6 +173,11 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
         }
 
         $kantorId = $this->resolveOrCreateKantorId($outletRaw);
+        $idRaw = trim((string) ($row['id'] ?? ''));
+
+        if ($idRaw !== '') {
+            return $this->buildUpdateModel((int) $idRaw, $row, $kantorId);
+        }
 
         $nama = trim((string) ($row['nama'] ?? ''));
         $alamat = trim((string) ($row['alamat'] ?? ''));
@@ -163,6 +203,59 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
             // unless it's assigned here.
             'status' => 'aktif',
         ]);
+    }
+
+    /**
+     * Update path — see class docblock's "ID-based upsert" section for the
+     * blank-means-leave-alone semantics. $id is already known valid (exists,
+     * and owned by this user if admin_final) from rules(); findPoiForUpdate()
+     * reuses that same fetch instead of querying again.
+     */
+    private function buildUpdateModel(int $id, array $row, int $kantorId): ?Poi
+    {
+        $poi = $this->findPoiForUpdate($id);
+
+        // Defensive guard only (rules() already validated this id) — e.g. a
+        // theoretical delete between validation and save.
+        if ($poi === null) {
+            return null;
+        }
+
+        $nama = trim((string) ($row['nama'] ?? ''));
+        $alamat = trim((string) ($row['alamat'] ?? ''));
+        $sektor = trim((string) ($row['sektor'] ?? ''));
+        $subSektor = $this->cleanSubSektor($row['sub_sektor'] ?? null);
+        $area = $this->blankToNull($row['area'] ?? null);
+        $bank = $this->statusMitraMap[$this->normalize((string) ($row['bank'] ?? ''))] ?? null;
+        $pic = $this->blankToNull($row['pic'] ?? null);
+
+        // Outlet is the only always-required field, so kantor_id always applies.
+        $poi->kantor_id = $kantorId;
+        if ($nama !== '') {
+            $poi->nama_poi = $nama;
+        }
+        if ($alamat !== '') {
+            $poi->alamat = $alamat;
+        }
+        if ($sektor !== '') {
+            $poi->sektor = $sektor;
+        }
+        if ($subSektor !== null) {
+            $poi->sub_sektor = $subSektor;
+        }
+        if ($area !== null) {
+            $poi->area = $area;
+        }
+        if ($bank !== null) {
+            $poi->status_mitra = $bank;
+        }
+        if ($pic !== null) {
+            $poi->pic = $pic;
+        }
+
+        $this->importedCount++;
+
+        return $poi;
     }
 
     /**
@@ -192,6 +285,23 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
                     $fail("Outlet '{$value}' bukan kantor yang Anda kelola.");
                 }
             }],
+            'id' => ['nullable', 'integer', function ($attribute, $value, $fail) {
+                if ($value === null || $value === '') {
+                    return;
+                }
+
+                $poi = $this->findPoiForUpdate((int) $value);
+
+                if ($poi === null) {
+                    $fail("ID {$value} tidak ditemukan di data POI — kemungkinan sudah dihapus.");
+
+                    return;
+                }
+
+                if ($this->allowedKantorIds !== null && ! in_array($poi->kantor_id, $this->allowedKantorIds, true)) {
+                    $fail("ID {$value} adalah POI di kantor yang bukan tanggung jawab Anda.");
+                }
+            }],
         ];
     }
 
@@ -199,6 +309,7 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
     {
         return [
             'outlet' => 'Outlet',
+            'id' => 'ID',
         ];
     }
 
@@ -206,6 +317,7 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
     {
         return [
             'outlet.required' => 'Outlet wajib diisi.',
+            'id.integer' => 'ID harus berupa angka.',
         ];
     }
 
@@ -250,6 +362,19 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
     public function errors(): array
     {
         return $this->errors;
+    }
+
+    /**
+     * Memoized so rules()'s existence/ownership check and model()'s update
+     * both resolve to the exact same fetch for a given row (see $poiCache).
+     */
+    private function findPoiForUpdate(int $id): ?Poi
+    {
+        if (! array_key_exists($id, $this->poiCache)) {
+            $this->poiCache[$id] = Poi::find($id) ?? false;
+        }
+
+        return $this->poiCache[$id] ?: null;
     }
 
     /** Case/whitespace-insensitive key for matching against canonical lists. */

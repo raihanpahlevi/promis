@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Imports\PoiImport;
 use App\Models\Kantor;
+use App\Models\Kunjungan;
 use App\Models\Poi;
 use App\Models\User;
+use Database\Factories\PoiFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -63,6 +65,31 @@ class PoiImportTest extends TestCase
         $lookup->setCellValue('B1', Poi::STATUS_MITRA_OPTIONS[0]);
 
         $path = tempnam(sys_get_temp_dir(), 'poi_import_').'.xlsx';
+        (new Xlsx($spreadsheet))->save($path);
+
+        return new UploadedFile($path, 'import.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+    }
+
+    /**
+     * Same shape as buildFixture() plus a leading "ID" column — mirrors what
+     * PoiExport actually produces, for the ID-based upsert re-import path.
+     *
+     * @param  array<int, array<int, mixed>>  $rows
+     */
+    private function buildFixtureWithId(array $rows): UploadedFile
+    {
+        $spreadsheet = new Spreadsheet();
+
+        $dataPoi = $spreadsheet->getActiveSheet();
+        $dataPoi->setTitle('Data POI');
+        $dataPoi->fromArray(
+            ['ID', 'Nama', 'Alamat', 'Sektor', 'Sub Sektor', 'Area', 'Outlet', 'Bank', 'PIC'],
+            null,
+            'A1'
+        );
+        $dataPoi->fromArray($rows, null, 'A2');
+
+        $path = tempnam(sys_get_temp_dir(), 'poi_import_id_').'.xlsx';
         (new Xlsx($spreadsheet))->save($path);
 
         return new UploadedFile($path, 'import.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
@@ -347,5 +374,189 @@ class PoiImportTest extends TestCase
         $response = $this->actingAs($admin)->get('/poi-import/template');
 
         $response->assertOk();
+    }
+
+    // ---------------- ID-based upsert (2026-07-16) ----------------
+
+    /**
+     * The core scenario: export POI, fill in the columns that came back
+     * blank, re-import the same file. Must UPDATE the existing row (kunjungan
+     * history stays attached, no duplicate), and blank cells must leave the
+     * existing value alone rather than clearing it or applying the
+     * insert-time placeholder.
+     */
+    public function test_import_with_id_updates_the_existing_poi_and_leaves_blank_cells_untouched(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $poi = PoiFactory::new()->create([
+            'kantor_id' => $kantor->id,
+            'nama_poi' => 'Toko Lama',
+            'alamat' => 'Jl. Lama No. 1',
+            'sektor' => 'Retail',
+            'sub_sektor' => 'CAFE',
+            'pic' => 'PIC Lama',
+            'status_mitra' => Poi::STATUS_MITRA_OPTIONS[0],
+        ]);
+        $sales = User::factory()->create(['force_password_change' => false, 'role' => User::ROLE_SALES]);
+        $kunjungan = Kunjungan::create([
+            'poi_id' => $poi->id, 'sales_id' => $sales->id,
+            'tanggal_kunjungan' => now()->toDateString(), 'hasil' => Kunjungan::HASIL_BERMINAT,
+        ]);
+
+        // Only Alamat and PIC are filled in; Nama/Sektor/Sub Sektor left
+        // blank on purpose (simulating "cuma isi kolom yang kosong").
+        $file = $this->buildFixtureWithId([
+            [$poi->id, '', 'Jl. Baru No. 99', '', '', '', 'Kantor A', '', 'PIC Baru'],
+        ]);
+
+        $response = $this->actingAs($admin)->post('/poi-import', ['file' => $file]);
+
+        $response->assertRedirect(route('poi.import.create'));
+        $summary = session('import_summary');
+        $this->assertSame(1, $summary['imported']);
+        $this->assertSame(0, $summary['rejected']);
+
+        // No duplicate — still exactly one POI row.
+        $this->assertSame(1, Poi::count());
+
+        $poi->refresh();
+        $this->assertSame('Jl. Baru No. 99', $poi->alamat, 'filled cell must overwrite');
+        $this->assertSame('PIC Baru', $poi->pic, 'filled cell must overwrite');
+        $this->assertSame('Toko Lama', $poi->nama_poi, 'blank cell must leave the existing value alone');
+        $this->assertSame('Retail', $poi->sektor, 'blank cell must leave the existing value alone');
+        $this->assertSame('CAFE', $poi->sub_sektor, 'blank cell must leave the existing value alone');
+        $this->assertSame(Poi::STATUS_MITRA_OPTIONS[0], $poi->status_mitra, 'blank Bank cell must not reset status_mitra');
+
+        // Visit history stays attached to the same POI — nothing deleted.
+        $this->assertDatabaseHas('kunjungan', ['id' => $kunjungan->id, 'poi_id' => $poi->id]);
+    }
+
+    public function test_import_with_id_can_reassign_kantor_via_outlet(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $kantorOld = Kantor::create(['kode' => 'OLD', 'nama' => 'Kantor Lama']);
+        $kantorNew = Kantor::create(['kode' => 'NEW', 'nama' => 'Kantor Baru']);
+        $poi = PoiFactory::new()->create(['kantor_id' => $kantorOld->id]);
+
+        $file = $this->buildFixtureWithId([
+            [$poi->id, '', '', '', '', '', 'Kantor Baru', '', ''],
+        ]);
+
+        $response = $this->actingAs($admin)->post('/poi-import', ['file' => $file]);
+
+        $response->assertRedirect(route('poi.import.create'));
+        $this->assertSame(1, session('import_summary')['imported']);
+
+        $poi->refresh();
+        $this->assertSame($kantorNew->id, $poi->kantor_id);
+        $this->assertDatabaseHas('dashboard_summary', ['kantor_id' => $kantorOld->id, 'total_poi' => 0]);
+        $this->assertDatabaseHas('dashboard_summary', ['kantor_id' => $kantorNew->id, 'total_poi' => 1]);
+    }
+
+    public function test_import_rejects_an_id_that_does_not_exist(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+
+        $file = $this->buildFixtureWithId([
+            [999999, 'Toko Hantu', '', '', '', '', 'Kantor A', '', ''],
+        ]);
+
+        $response = $this->actingAs($admin)->post('/poi-import', ['file' => $file]);
+
+        $summary = session('import_summary');
+        $this->assertSame(0, $summary['imported']);
+        $this->assertSame(1, $summary['rejected']);
+        $reasons = collect($summary['errors'])->flatMap(fn ($e) => $e['errors'])->implode(' | ');
+        $this->assertStringContainsString('tidak ditemukan', $reasons);
+        $this->assertDatabaseMissing('poi', ['nama_poi' => 'Toko Hantu']);
+    }
+
+    /**
+     * admin_final can only update POI in kantor they're assigned to — an ID
+     * pointing at a POI in another kantor must be rejected, not silently
+     * applied (that would be a privilege-escalation path around the same
+     * scoping every other write in this app enforces).
+     */
+    public function test_admin_final_cannot_update_a_poi_outside_their_kantor_via_id(): void
+    {
+        $adminFinal = User::factory()->adminFinal()->create(['force_password_change' => false]);
+        $kantorMine = Kantor::create(['kode' => 'MINE', 'nama' => 'Kantor Mine']);
+        $kantorOther = Kantor::create(['kode' => 'OTHER', 'nama' => 'Kantor Other']);
+        $adminFinal->kantor()->attach($kantorMine->id);
+
+        $poiOther = PoiFactory::new()->create(['kantor_id' => $kantorOther->id, 'nama_poi' => 'Toko Bukan Punyaku']);
+
+        // Outlet points at a kantor admin_final DOES own (isolates the
+        // assertion to the `id` rule's ownership check — the POI's current
+        // kantor, Kantor Other, is what's actually unowned here) — if Outlet
+        // also pointed at an unowned kantor, that rule would independently
+        // reject the row too and the row would fail for two reasons instead
+        // of the one this test means to verify.
+        $file = $this->buildFixtureWithId([
+            [$poiOther->id, 'Toko Diubah Paksa', '', '', '', '', 'Kantor Mine', '', ''],
+        ]);
+
+        $response = $this->actingAs($adminFinal)->post('/poi-import', ['file' => $file]);
+
+        $summary = session('import_summary');
+        $this->assertSame(0, $summary['imported']);
+        $this->assertSame(1, $summary['rejected']);
+        $reasons = collect($summary['errors'])->flatMap(fn ($e) => $e['errors'])->implode(' | ');
+        $this->assertStringContainsString('bukan tanggung jawab Anda', $reasons);
+
+        $poiOther->refresh();
+        $this->assertSame('Toko Bukan Punyaku', $poiOther->nama_poi, 'unauthorized update must not apply');
+    }
+
+    /**
+     * admin_final CAN update POI they do own via ID, same as their normal
+     * manual-edit rights.
+     */
+    public function test_admin_final_can_update_a_poi_in_their_own_kantor_via_id(): void
+    {
+        $adminFinal = User::factory()->adminFinal()->create(['force_password_change' => false]);
+        $kantorMine = Kantor::create(['kode' => 'MINE', 'nama' => 'Kantor Mine']);
+        $adminFinal->kantor()->attach($kantorMine->id);
+
+        $poi = PoiFactory::new()->create(['kantor_id' => $kantorMine->id, 'pic' => '']);
+
+        $file = $this->buildFixtureWithId([
+            [$poi->id, '', '', '', '', '', 'Kantor Mine', '', 'PIC Terisi'],
+        ]);
+
+        $response = $this->actingAs($adminFinal)->post('/poi-import', ['file' => $file]);
+
+        $this->assertSame(1, session('import_summary')['imported']);
+        $poi->refresh();
+        $this->assertSame('PIC Terisi', $poi->pic);
+    }
+
+    /**
+     * Re-uploading the exact same exported-and-filled file twice must not
+     * create a second copy or touch the visit history on the second pass —
+     * directly the scenario that prompted this feature.
+     */
+    public function test_reimporting_the_same_file_twice_does_not_duplicate_or_touch_kunjungan(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $poi = PoiFactory::new()->create(['kantor_id' => $kantor->id]);
+        $sales = User::factory()->create(['force_password_change' => false, 'role' => User::ROLE_SALES]);
+        $kunjungan = Kunjungan::create([
+            'poi_id' => $poi->id, 'sales_id' => $sales->id,
+            'tanggal_kunjungan' => now()->toDateString(), 'hasil' => Kunjungan::HASIL_BERMINAT,
+        ]);
+
+        $rows = [[$poi->id, '', '', '', '', '', 'Kantor A', '', 'PIC Sama']];
+
+        $this->actingAs($admin)->post('/poi-import', ['file' => $this->buildFixtureWithId($rows)]);
+        $this->actingAs($admin)->post('/poi-import', ['file' => $this->buildFixtureWithId($rows)]);
+
+        $this->assertSame(1, Poi::count());
+        $this->assertSame(1, Kunjungan::count());
+        $this->assertDatabaseHas('kunjungan', ['id' => $kunjungan->id, 'poi_id' => $poi->id]);
+        $this->assertDatabaseHas('dashboard_summary', ['kantor_id' => $kantor->id, 'total_poi' => 1]);
     }
 }
