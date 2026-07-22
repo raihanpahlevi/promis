@@ -25,6 +25,14 @@ use Throwable;
  * present in files produced by PoiExport) switches a row from insert to
  * update — see "ID-based upsert" below.
  *
+ * "Kategori" is accepted as an alias heading for Sektor (2026-07-22) — a
+ * real source file used that label instead of "Sektor", and since
+ * WithHeadingRow only recognizes the exact column name, every row's sektor
+ * silently landed on the 'Lainnya' blank-fallback below instead of raising
+ * any error (8753 rows, one production incident). $row['sektor'] still wins
+ * when a file has both; 'kategori' is only consulted when 'sektor' is
+ * missing/blank.
+ *
  * Deliberately lenient by design (explicit product decision, 2026-07-14):
  * **Outlet is the only field that can reject a row, and only when it's
  * blank.** A non-blank Outlet that doesn't match any existing kantor is NOT
@@ -189,7 +197,7 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
 
         $nama = trim((string) ($row['nama'] ?? ''));
         $alamat = trim((string) ($row['alamat'] ?? ''));
-        $sektor = trim((string) ($row['sektor'] ?? ''));
+        $sektor = trim((string) ($row['sektor'] ?? $row['kategori'] ?? ''));
         $area = $this->normalizeArea($row['area'] ?? null);
         $bank = $this->statusMitraMap[$this->normalize((string) ($row['bank'] ?? ''))] ?? Poi::BELUM_BERMITRA_BNI;
 
@@ -231,7 +239,7 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
 
         $nama = trim((string) ($row['nama'] ?? ''));
         $alamat = trim((string) ($row['alamat'] ?? ''));
-        $sektor = trim((string) ($row['sektor'] ?? ''));
+        $sektor = trim((string) ($row['sektor'] ?? $row['kategori'] ?? ''));
         $subSektor = $this->cleanSubSektor($row['sub_sektor'] ?? null);
         $area = $this->normalizeArea($row['area'] ?? null);
         $bank = $this->statusMitraMap[$this->normalize((string) ($row['bank'] ?? ''))] ?? null;

@@ -327,6 +327,34 @@ class PoiImportTest extends TestCase
         $this->assertDatabaseHas('poi', ['nama_poi' => 'Toko Area Bebas', 'area' => 'Luar Kota']);
     }
 
+    /**
+     * "Kategori" is accepted as an alias heading for "Sektor" (2026-07-22,
+     * fixing a real production incident: a source file used that label,
+     * WithHeadingRow didn't recognize it, and 8753 rows silently landed on
+     * the 'Lainnya' blank-fallback with no error raised anywhere).
+     */
+    public function test_admin_import_accepts_kategori_as_an_alias_heading_for_sektor(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Sheet1');
+        $sheet->fromArray(['Nama', 'Alamat', 'Kategori', 'Sub Sektor', 'Area', 'Outlet', 'Bank', 'PIC'], null, 'A1');
+        $sheet->fromArray([['Toko Kategori', 'Jl. A No. 1', 'Retail', '', '', 'Kantor A', '', '']], null, 'A2');
+
+        $path = tempnam(sys_get_temp_dir(), 'poi_import_').'.xlsx';
+        (new Xlsx($spreadsheet))->save($path);
+        $file = new UploadedFile($path, 'import.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+
+        $response = $this->actingAs($admin)->post('/poi-import', ['file' => $file]);
+
+        $response->assertRedirect(route('poi.import.create'));
+        $this->assertSame(1, session('import_summary')['imported']);
+        $this->assertDatabaseHas('poi', ['nama_poi' => 'Toko Kategori', 'sektor' => 'Retail']);
+    }
+
     public function test_admin_final_import_rejects_rows_for_unowned_kantor_even_if_kantor_is_valid(): void
     {
         $adminFinal = User::factory()->adminFinal()->create(['force_password_change' => false]);
