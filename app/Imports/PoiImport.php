@@ -47,6 +47,14 @@ use Throwable;
  *     dropdown; import data is internal and doesn't need to match it). Only
  *     truly blank sektor falls back to 'Lainnya' since the column is NOT
  *     NULL; blank area stays null (already optional everywhere it's used).
+ *     Exception: area DOES get one narrow normalization (normalizeArea(),
+ *     2026-07-22) — a cell that's recognizably "Ring 1"/"ring2"/"RING  3"
+ *     (case/whitespace-insensitive, jarak suffix optional) is canonicalized
+ *     to the exact Poi::AREA_OPTIONS string ("Ring 1 (0 - 1 Km)", etc.), since
+ *     the dashboard's ring breakdown filters on an exact string match — a
+ *     near-miss like "Ring 1" would silently show up as 0 in every ring
+ *     bucket despite the row existing. Anything that doesn't look like
+ *     "Ring N" is left untouched, same lenient free-text handling as sektor.
  *   - bank not one of the 3 canonical status_mitra values -> falls back to
  *     Poi::BELUM_BERMITRA_BNI, NOT any other bucket: that's the only default
  *     that keeps the POI prospectable (visible to sales, countable in
@@ -182,7 +190,7 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
         $nama = trim((string) ($row['nama'] ?? ''));
         $alamat = trim((string) ($row['alamat'] ?? ''));
         $sektor = trim((string) ($row['sektor'] ?? ''));
-        $area = $this->blankToNull($row['area'] ?? null);
+        $area = $this->normalizeArea($row['area'] ?? null);
         $bank = $this->statusMitraMap[$this->normalize((string) ($row['bank'] ?? ''))] ?? Poi::BELUM_BERMITRA_BNI;
 
         $this->importedCount++;
@@ -225,7 +233,7 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
         $alamat = trim((string) ($row['alamat'] ?? ''));
         $sektor = trim((string) ($row['sektor'] ?? ''));
         $subSektor = $this->cleanSubSektor($row['sub_sektor'] ?? null);
-        $area = $this->blankToNull($row['area'] ?? null);
+        $area = $this->normalizeArea($row['area'] ?? null);
         $bank = $this->statusMitraMap[$this->normalize((string) ($row['bank'] ?? ''))] ?? null;
         $pic = $this->blankToNull($row['pic'] ?? null);
 
@@ -425,6 +433,42 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
         }
 
         return $kode;
+    }
+
+    /**
+     * Canonicalizes "Ring 1"/"ring2"/"RING  3" shorthand (case/whitespace
+     * insensitive, jarak suffix optional) to the exact Poi::AREA_OPTIONS
+     * string the dashboard's ring breakdown filters on — see class docblock.
+     * The regex only matches a bare "Ring" immediately followed by 1-4 and a
+     * word boundary, so "Ring 10" or a value that merely contains "ring"
+     * elsewhere doesn't false-positive; anything that doesn't match is
+     * returned trimmed but otherwise untouched (free text, same as sektor).
+     *
+     * "Ring 0" is deliberately NOT a 5th bucket (there's no such ring in
+     * Poi::AREA_OPTIONS or the dashboard breakdown) — product decision
+     * (2026-07-22): treat it the same as a blank cell (null), not as literal
+     * free text, since "Ring 0" is how the source data spells "no ring
+     * assigned yet", not a genuine 5th distance band.
+     */
+    private function normalizeArea(mixed $value): ?string
+    {
+        $trimmed = $this->blankToNull($value);
+
+        if ($trimmed === null) {
+            return null;
+        }
+
+        $normalized = $this->normalize($trimmed);
+
+        if (preg_match('/RING\s*0\b/', $normalized)) {
+            return null;
+        }
+
+        if (preg_match('/RING\s*([1-4])\b/', $normalized, $m)) {
+            return Poi::AREA_OPTIONS[((int) $m[1]) - 1];
+        }
+
+        return $trimmed;
     }
 
     private function blankToNull(mixed $value): ?string

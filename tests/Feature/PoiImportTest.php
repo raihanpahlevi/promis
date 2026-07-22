@@ -296,6 +296,37 @@ class PoiImportTest extends TestCase
         ]);
     }
 
+    /**
+     * "Ring 1"/"ring2"/"RING  3" shorthand in the Area column must land on
+     * the exact Poi::AREA_OPTIONS string the dashboard's ring breakdown
+     * filters on (see PoiImport::normalizeArea()) — a near-miss like plain
+     * "Ring 1" would silently show as 0 in every ring bucket. Non-ring free
+     * text (e.g. a typo or a genuinely different area label) is left as-is.
+     */
+    public function test_admin_import_canonicalizes_ring_shorthand_in_area_column(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+
+        $file = $this->buildFixture([
+            ['Toko Ring Pendek', 'Jl. A No. 1', Poi::SEKTOR_OPTIONS[0], '', 'Ring 1', 'Kantor A', '', ''],
+            ['Toko Ring Beda Spasi', 'Jl. B No. 2', Poi::SEKTOR_OPTIONS[0], '', '  ring   2  ', 'Kantor A', '', ''],
+            ['Toko Ring Rapat', 'Jl. C No. 3', Poi::SEKTOR_OPTIONS[0], '', 'RING3', 'Kantor A', '', ''],
+            ['Toko Ring Nol', 'Jl. D No. 4', Poi::SEKTOR_OPTIONS[0], '', 'Ring 0', 'Kantor A', '', ''],
+            ['Toko Area Bebas', 'Jl. E No. 5', Poi::SEKTOR_OPTIONS[0], '', 'Luar Kota', 'Kantor A', '', ''],
+        ]);
+
+        $response = $this->actingAs($admin)->post('/poi-import', ['file' => $file]);
+
+        $response->assertRedirect(route('poi.import.create'));
+        $this->assertSame(5, session('import_summary')['imported']);
+        $this->assertDatabaseHas('poi', ['nama_poi' => 'Toko Ring Pendek', 'area' => Poi::AREA_OPTIONS[0]]);
+        $this->assertDatabaseHas('poi', ['nama_poi' => 'Toko Ring Beda Spasi', 'area' => Poi::AREA_OPTIONS[1]]);
+        $this->assertDatabaseHas('poi', ['nama_poi' => 'Toko Ring Rapat', 'area' => Poi::AREA_OPTIONS[2]]);
+        $this->assertDatabaseHas('poi', ['nama_poi' => 'Toko Ring Nol', 'area' => null]);
+        $this->assertDatabaseHas('poi', ['nama_poi' => 'Toko Area Bebas', 'area' => 'Luar Kota']);
+    }
+
     public function test_admin_final_import_rejects_rows_for_unowned_kantor_even_if_kantor_is_valid(): void
     {
         $adminFinal = User::factory()->adminFinal()->create(['force_password_change' => false]);
