@@ -3,8 +3,11 @@
 namespace Tests\Feature;
 
 use App\Models\Kantor;
+use App\Models\Kunjungan;
+use App\Models\PoiReopenLog;
 use App\Models\Unit;
 use App\Models\User;
+use Database\Factories\PoiFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\Concerns\RegistersUserRoutes;
@@ -45,6 +48,7 @@ class UserTest extends TestCase
         $this->actingAs($adminFinal)->put("/user/{$target->id}", [])->assertForbidden();
         $this->actingAs($adminFinal)->post("/user/{$target->id}/toggle-active")->assertForbidden();
         $this->actingAs($adminFinal)->post("/user/{$target->id}/reset-password")->assertForbidden();
+        $this->actingAs($adminFinal)->delete("/user/{$target->id}")->assertForbidden();
         $this->actingAs($adminFinal)->get('/user-import')->assertForbidden();
         $this->actingAs($adminFinal)->post('/user-import', [])->assertForbidden();
         $this->actingAs($adminFinal)->get('/user-import/template')->assertForbidden();
@@ -64,6 +68,7 @@ class UserTest extends TestCase
         $this->actingAs($sales)->put("/user/{$target->id}", [])->assertForbidden();
         $this->actingAs($sales)->post("/user/{$target->id}/toggle-active")->assertForbidden();
         $this->actingAs($sales)->post("/user/{$target->id}/reset-password")->assertForbidden();
+        $this->actingAs($sales)->delete("/user/{$target->id}")->assertForbidden();
         $this->actingAs($sales)->get('/user-import')->assertForbidden();
         $this->actingAs($sales)->post('/user-import', [])->assertForbidden();
         $this->actingAs($sales)->get('/user-import/template')->assertForbidden();
@@ -376,5 +381,100 @@ class UserTest extends TestCase
         $response->assertRedirect('/dashboard');
         $this->assertAuthenticatedAs($target->fresh());
         $this->assertTrue($target->fresh()->force_password_change);
+    }
+
+    // ---------------- Hard delete ----------------
+
+    public function test_admin_can_hard_delete_another_user(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $target = User::factory()->create(['force_password_change' => false]);
+
+        $response = $this->actingAs($admin)->delete("/user/{$target->id}");
+
+        $response->assertRedirect(route('user.index'));
+        $this->assertDatabaseMissing('users', ['id' => $target->id]);
+    }
+
+    public function test_admin_cannot_hard_delete_their_own_account(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+
+        $response = $this->actingAs($admin)->delete("/user/{$admin->id}");
+
+        $response->assertSessionHasErrors('delete');
+        $this->assertDatabaseHas('users', ['id' => $admin->id]);
+    }
+
+    /**
+     * The last-admin guard blocking a DIFFERENT acting admin (rather than a
+     * self-delete) is not reachable through the real HTTP route: this whole
+     * route group is gated `role:admin`, so whenever the target is the only
+     * admin left, the acting user (who must themselves be an admin to even
+     * reach this route) can only be that same admin — i.e. self-delete,
+     * already covered by test_admin_cannot_hard_delete_their_own_account().
+     * This test instead pins the guard's actual reachable boundary: deleting
+     * an admin is fine as long as another admin still exists afterward.
+     */
+    public function test_admin_can_hard_delete_another_admin_when_more_than_one_admin_exists(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $otherAdmin = User::factory()->admin()->create(['force_password_change' => false]);
+
+        $response = $this->actingAs($admin)->delete("/user/{$otherAdmin->id}");
+
+        $response->assertRedirect(route('user.index'));
+        $this->assertDatabaseMissing('users', ['id' => $otherAdmin->id]);
+        $this->assertDatabaseHas('users', ['id' => $admin->id]);
+    }
+
+    /**
+     * poi_reopen_log.user_id has no cascade/null-on-delete (RESTRICT by
+     * design, see UserController::hardDeleteBlockedReason()) — a user who
+     * ever hapus/reopen'd a POI must be rejected with a clear reason instead
+     * of a raw DB FK error.
+     */
+    public function test_admin_cannot_hard_delete_a_user_with_poi_reopen_log_history(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $target = User::factory()->create(['force_password_change' => false]);
+        $poi = PoiFactory::new()->create();
+
+        PoiReopenLog::create([
+            'poi_id' => $poi->id,
+            'action' => 'hapus',
+            'alasan' => 'Duplikat data',
+            'user_id' => $target->id,
+        ]);
+
+        $response = $this->actingAs($admin)->delete("/user/{$target->id}");
+
+        $response->assertSessionHasErrors('delete');
+        $this->assertDatabaseHas('users', ['id' => $target->id]);
+    }
+
+    /**
+     * kunjungan.sales_id IS cascadeOnDelete — a permitted hard delete
+     * silently wipes the user's visit history along with the account. This
+     * pins down that this is the actual (intended) behavior, not an
+     * oversight, since a hard delete is meant to be a genuine full erasure.
+     */
+    public function test_hard_deleting_a_user_cascades_their_kunjungan_history(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $target = User::factory()->create(['force_password_change' => false]);
+        $poi = PoiFactory::new()->create();
+
+        $kunjungan = Kunjungan::create([
+            'poi_id' => $poi->id,
+            'sales_id' => $target->id,
+            'tanggal_kunjungan' => now()->toDateString(),
+            'hasil' => Kunjungan::HASIL_BELUM_BERTEMU,
+        ]);
+
+        $this->actingAs($admin)->delete("/user/{$target->id}")->assertRedirect();
+
+        $this->assertDatabaseMissing('users', ['id' => $target->id]);
+        $this->assertDatabaseMissing('kunjungan', ['id' => $kunjungan->id]);
     }
 }

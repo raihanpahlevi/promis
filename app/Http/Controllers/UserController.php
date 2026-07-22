@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Kantor;
+use App\Models\PoiReopenLog;
 use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
@@ -17,9 +18,12 @@ use Illuminate\View\View;
  * gated `role:admin` at the route level, this controller does not re-check
  * roles itself.
  *
- * Users are never hard-deleted (PRD: "nonaktifkan user", not "hapus") — see
- * toggleActive(). Password-reset-to-NPP is the only recovery path since this
- * system has no self-service "forgot password" flow.
+ * Deactivating (toggleActive()) is still the PRD-mandated, reversible way to
+ * remove a user's access day-to-day. A real hard delete (destroy(), added
+ * 2026-07-22 at explicit product request) also exists for genuinely-unwanted
+ * accounts, gated by hardDeleteBlockedReason() — see that method for why it's
+ * not always available. Password-reset-to-NPP is the only recovery path since
+ * this system has no self-service "forgot password" flow.
  */
 class UserController extends Controller
 {
@@ -98,7 +102,7 @@ class UserController extends Controller
             ->with('status', "User {$user->nama_lengkap} berhasil ditambahkan. Password awal = NPP ({$user->npp}).");
     }
 
-    public function edit(User $user): View
+    public function edit(Request $request, User $user): View
     {
         $user->load('kantor');
 
@@ -107,6 +111,8 @@ class UserController extends Controller
             'kantorOptions' => $this->kantorOptions(),
             'roleOptions' => $this->roleOptions(),
             'unitOptions' => $this->unitOptions(),
+            'kunjunganCount' => $user->kunjungan()->count(),
+            'hardDeleteBlockedReason' => $this->hardDeleteBlockedReason($user, $request->user()),
         ]);
     }
 
@@ -181,6 +187,55 @@ class UserController extends Controller
         ])->save();
 
         return back()->with('status', "Password {$user->nama_lengkap} berhasil direset ke NPP ({$user->npp}).");
+    }
+
+    /**
+     * Hard delete — permanent, unlike toggleActive(). Guard order matters
+     * (checked in destroy() and reused as-is by edit() to render the "Hapus
+     * Permanen" panel's state, so the two can never drift out of sync):
+     *  - self-delete: same self-lockout reasoning as update()/toggleActive().
+     *  - the last remaining admin: this system has no other recovery path
+     *    for an all-admin-accounts-gone lockout (no prior guard existed for
+     *    this anywhere, unlike self-lockout, which update()/toggleActive()
+     *    already covered).
+     *  - a user who ever hapus/reopen'd a POI: poi_reopen_log.user_id is
+     *    `constrained('users')` with NO onDelete cascade/null (RESTRICT by
+     *    default — see its migration), a deliberate audit-trail protection,
+     *    not an oversight. Hard-deleting such a user would otherwise bubble
+     *    up as a raw DB FK error, so it's rejected here with a clear reason
+     *    instead — deactivate is the only option for that user.
+     * kunjungan.sales_id IS cascadeOnDelete, so a permitted delete silently
+     * wipes the user's entire visit history — not guarded against (that's
+     * the whole point of a hard delete), but the edit view surfaces the
+     * count up front via $kunjunganCount so the admin isn't surprised.
+     */
+    private function hardDeleteBlockedReason(User $user, User $actingUser): ?string
+    {
+        if ($user->id === $actingUser->id) {
+            return 'Anda tidak dapat menghapus akun Anda sendiri.';
+        }
+
+        if ($user->role === User::ROLE_ADMIN && User::where('role', User::ROLE_ADMIN)->count() <= 1) {
+            return 'User ini adalah admin terakhir yang tersisa di sistem — tidak dapat dihapus permanen.';
+        }
+
+        if (PoiReopenLog::where('user_id', $user->id)->exists()) {
+            return 'User ini pernah menghapus/reopen POI (ada jejak audit yang terkait) sehingga tidak bisa dihapus permanen. Nonaktifkan user ini sebagai gantinya.';
+        }
+
+        return null;
+    }
+
+    public function destroy(Request $request, User $user): RedirectResponse
+    {
+        if ($reason = $this->hardDeleteBlockedReason($user, $request->user())) {
+            return back()->withErrors(['delete' => $reason]);
+        }
+
+        $nama = $user->nama_lengkap;
+        $user->delete();
+
+        return redirect()->route('user.index')->with('status', "User {$nama} berhasil dihapus permanen.");
     }
 
     private function kantorOptions()

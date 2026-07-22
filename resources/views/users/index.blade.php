@@ -95,6 +95,18 @@
                 </td>
                 <td class="cell-actions">
                   <a href="{{ route('user.edit', $u) }}" class="action-link"><i class="bi bi-pencil"></i> Edit</a>
+                  @if ($u->id !== auth()->id())
+                    <form method="POST" action="{{ route('user.toggle-active', $u) }}" onsubmit="return confirm('{{ $u->is_active ? 'Nonaktifkan' : 'Aktifkan kembali' }} user ini?');" style="display:inline">
+                      @csrf
+                      <button type="submit" class="action-link{{ $u->is_active ? ' danger' : '' }}" style="background:none;border:none;font:inherit;cursor:pointer">
+                        @if ($u->is_active)
+                          <i class="bi bi-x-octagon"></i> Nonaktifkan
+                        @else
+                          <i class="bi bi-arrow-counterclockwise"></i> Aktifkan
+                        @endif
+                      </button>
+                    </form>
+                  @endif
                 </td>
               </tr>
             @endforeach

@@ -78,6 +78,35 @@
           </form>
         @endif
       </div>
+
+      <div class="panel" style="border:1.5px solid var(--danger)">
+        <div class="panel-head"><h3 style="color:var(--danger)">Hapus Permanen</h3></div>
+        @if ($hardDeleteBlockedReason)
+          <p style="font-size:13px;color:#8A6B55;line-height:1.6">{{ $hardDeleteBlockedReason }}</p>
+        @else
+          @php
+            $confirmMsg = "Hapus PERMANEN user {$user->nama_lengkap}?";
+            if ($kunjunganCount > 0) {
+                $confirmMsg .= " Ini juga akan menghapus {$kunjunganCount} riwayat kunjungan miliknya.";
+            }
+            $confirmMsg .= ' Tindakan ini tidak bisa dibatalkan.';
+          @endphp
+          <p style="font-size:13px;color:#8A6B55;line-height:1.6">
+            Tindakan ini <b>permanen dan tidak bisa dibatalkan</b>.
+            @if ($kunjunganCount > 0)
+              User ini punya <b>{{ $kunjunganCount }} riwayat kunjungan</b> yang akan ikut terhapus.
+            @endif
+            Kalau cuma mau mencabut akses login (dan bisa dibatalkan), gunakan Nonaktifkan di atas.
+          </p>
+          <form method="POST" action="{{ route('user.destroy', $user) }}" onsubmit="return confirm(@json($confirmMsg));">
+            @csrf
+            @method('DELETE')
+            <button type="submit" class="btn-primary-custom" style="width:auto;padding:10px 18px;background:var(--danger)">
+              <i class="bi bi-trash3"></i> Hapus Permanen
+            </button>
+          </form>
+        @endif
+      </div>
     </div>
   </div>
 @endsection

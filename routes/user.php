@@ -28,4 +28,5 @@ Route::middleware('role:admin')->group(function () {
     Route::put('/user/{user}', [UserController::class, 'update'])->name('user.update');
     Route::post('/user/{user}/toggle-active', [UserController::class, 'toggleActive'])->name('user.toggle-active');
     Route::post('/user/{user}/reset-password', [UserController::class, 'resetPassword'])->name('user.reset-password');
+    Route::delete('/user/{user}', [UserController::class, 'destroy'])->name('user.destroy');
 });
