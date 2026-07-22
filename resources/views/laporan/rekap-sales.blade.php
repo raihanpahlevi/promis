@@ -134,8 +134,6 @@
       @if ($tidakSummary->isEmpty())
         <div class="empty-state-rich">
           <i class="bi bi-emoji-smile"></i>
-          <p>Semua sales pada cakupan ini sudah kunjungan di rentang tanggal tersebut.</p>
-          <small>Tidak ada yang perlu dikejar untuk filter kantor/tanggal saat ini.</small>
         </div>
       @else
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px">
@@ -194,8 +192,6 @@
       @if ($tidakRows->isEmpty())
         <div class="empty-state-rich">
           <i class="bi bi-emoji-smile"></i>
-          <p>Semua sales pada cakupan ini sudah kunjungan di rentang tanggal tersebut.</p>
-          <small>Tidak ada tindak lanjut yang perlu dikejar untuk filter ini.</small>
         </div>
       @else
         <div style="overflow-x:auto">
