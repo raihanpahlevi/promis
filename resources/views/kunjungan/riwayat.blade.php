@@ -58,6 +58,7 @@
               <th>POI</th>
               <th>Produk</th>
               <th>Hasil</th>
+              <th>Norek/CIF</th>
               <th class="num" style="text-align:right">Nominal</th>
               <th>Catatan</th>
             </tr>
@@ -69,6 +70,7 @@
                 <td>{{ $k->poi->nama_poi ?? '-' }}</td>
                 <td>{{ $k->produkList->pluck('produk')->implode(', ') ?: '-' }}</td>
                 <td><span class="badge {{ $k->hasilBadgeClass() }}">{{ $k->hasil }}</span></td>
+                <td>{{ $k->norek_cif ?? '-' }}</td>
                 <td class="num" style="text-align:right">{{ $k->nominal !== null ? 'Rp '.number_format((float) $k->nominal, 0, ',', '.') : '-' }}</td>
                 <td>{{ $k->catatan ?? '-' }}</td>
               </tr>

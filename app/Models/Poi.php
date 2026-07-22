@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'nama_poi', 'alamat', 'sektor', 'sub_sektor', 'area', 'kantor_id',
-    'status_mitra', 'pic', 'latitude', 'longitude', 'geocode_status',
+    'status_mitra', 'pic', 'norek_cif', 'latitude', 'longitude', 'geocode_status',
     'status', 'created_by', 'collecting_by',
 ])]
 #[ObservedBy(PoiObserver::class)]

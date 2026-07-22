@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['poi_id', 'sales_id', 'tanggal_kunjungan', 'hasil', 'nominal', 'catatan'])]
+#[Fillable(['poi_id', 'sales_id', 'tanggal_kunjungan', 'hasil', 'norek_cif', 'nominal', 'catatan'])]
 #[ObservedBy(KunjunganObserver::class)]
 class Kunjungan extends Model
 {

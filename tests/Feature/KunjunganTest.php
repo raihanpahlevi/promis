@@ -184,6 +184,46 @@ class KunjunganTest extends TestCase
         $this->assertSame('Samsul', $poi->fresh()->pic);
     }
 
+    /**
+     * Unlike pic/status_mitra, norek_cif stamps onto the POI regardless of
+     * hasil (2026-07-22) — a sales can capture it on any visit outcome, not
+     * just Closing.
+     */
+    public function test_norek_cif_is_recorded_on_the_kunjungan_and_stamped_onto_the_poi(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $sales = $this->sales($kantor);
+        $poi = $this->poi(['kantor_id' => $kantor->id, 'status' => 'aktif', 'norek_cif' => null]);
+
+        $this->actingAs($sales)->post('/kunjungan', [
+            'poi_id' => $poi->id,
+            'hasil' => Kunjungan::HASIL_BERMINAT,
+            'norek_cif' => '1234567890',
+        ])->assertRedirect('/kunjungan/riwayat');
+
+        $this->assertDatabaseHas('kunjungan', ['poi_id' => $poi->id, 'norek_cif' => '1234567890']);
+        $this->assertSame('1234567890', $poi->fresh()->norek_cif);
+    }
+
+    /**
+     * A blank norek_cif on THIS visit must not clobber a value the POI
+     * already has from an earlier visit — mirrors PoiImport's "blank means
+     * leave alone" update semantics, not pic's "always overwrite".
+     */
+    public function test_a_blank_norek_cif_leaves_the_pois_existing_value_untouched(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $sales = $this->sales($kantor);
+        $poi = $this->poi(['kantor_id' => $kantor->id, 'status' => 'aktif', 'norek_cif' => '1112223334']);
+
+        $this->actingAs($sales)->post('/kunjungan', [
+            'poi_id' => $poi->id,
+            'hasil' => Kunjungan::HASIL_BERMINAT,
+        ])->assertRedirect('/kunjungan/riwayat');
+
+        $this->assertSame('1112223334', $poi->fresh()->norek_cif);
+    }
+
     public function test_hasil_collecting_dokumen_locks_the_poi_to_the_acting_sales(): void
     {
         $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
@@ -573,6 +613,24 @@ class KunjunganTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Budi Santoso (BTRM)');
+    }
+
+    public function test_riwayat_kunjungan_table_displays_the_norek_cif(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $poi = $this->poi(['kantor_id' => $kantor->id]);
+        $sales = $this->sales($kantor);
+        Kunjungan::create([
+            'poi_id' => $poi->id, 'sales_id' => $sales->id,
+            'tanggal_kunjungan' => now()->toDateString(), 'hasil' => Kunjungan::HASIL_CLOSING,
+            'norek_cif' => '9990001112',
+        ]);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $response = $this->actingAs($admin)->get('/kunjungan');
+
+        $response->assertOk();
+        $response->assertSee('9990001112');
     }
 
     public function test_export_button_carries_through_the_active_filters(): void

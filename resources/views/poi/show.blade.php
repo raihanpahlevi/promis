@@ -38,6 +38,7 @@
         <div class="detail-row"><span>Area</span><span>{{ $poi->area ?? '-' }}</span></div>
         <div class="detail-row"><span>Status Mitra</span><span><span class="badge {{ $poi->statusMitraBadgeClass() }}">{{ $poi->status_mitra }}</span></span></div>
         <div class="detail-row"><span>PIC</span><span>{{ $poi->pic ?? '-' }}</span></div>
+        <div class="detail-row"><span>Nomor Rekening/CIF</span><span>{{ $poi->norek_cif ?? '-' }}</span></div>
         <div class="detail-row">
           <span>Status Geocode</span>
           <span>

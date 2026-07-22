@@ -132,8 +132,15 @@ class KunjunganController extends Controller
      * to the POI. A closing also stamps poi.pic with the closing sales' "Nama (Unit)"
      * (User::picLabel) — always overwriting whatever was there before (stale import data,
      * or a previous closer from another unit), since PIC should reflect whoever most
-     * recently actually closed the POI, not who happened to be listed first. Both the
-     * Kunjungan row and the Poi update happen in one transaction so PoiObserver's
+     * recently actually closed the POI, not who happened to be listed first.
+     *
+     * norek_cif (2026-07-22) is a free-text field on the form (not gated to Closing like
+     * pic/status_mitra — a sales can capture it on any hasil) that's recorded on the
+     * Kunjungan row AND stamped onto poi.norek_cif so it shows on the POI's detail page
+     * even if the POI never had one before. A blank norek_cif on this visit leaves the
+     * POI's existing value untouched rather than clearing it.
+     *
+     * Both the Kunjungan row and the Poi update happen in one transaction so PoiObserver's
      * dashboard_summary bookkeeping never sees a half-applied closing.
      */
     public function store(Request $request): RedirectResponse
@@ -168,6 +175,7 @@ class KunjunganController extends Controller
                 'nullable',
                 Rule::in(Poi::STATUS_MITRA_AFTER_CLOSING),
             ],
+            'norek_cif' => ['nullable', 'string', 'max:100'],
             'nominal' => ['nullable', 'numeric', 'min:0'],
             'catatan' => ['nullable', 'string', 'max:2000'],
         ], [
@@ -202,6 +210,7 @@ class KunjunganController extends Controller
                 // form, which has no date field at all and hardcodes date('Y-m-d').
                 'tanggal_kunjungan' => now()->toDateString(),
                 'hasil' => $data['hasil'],
+                'norek_cif' => $data['norek_cif'] ?? null,
                 'nominal' => $data['nominal'] ?? null,
                 'catatan' => $data['catatan'] ?? null,
             ]);
@@ -216,6 +225,14 @@ class KunjunganController extends Controller
                 'collecting_by' => $data['hasil'] === Kunjungan::HASIL_COLLECTING_DOKUMEN ? $user->id : null,
                 'status_mitra' => $isClosing ? $data['status_mitra_baru'] : $lockedPoi->status_mitra,
                 'pic' => $isClosing ? $user->picLabel() : $lockedPoi->pic,
+                // Stamped whenever a sales fills this in, regardless of hasil
+                // (unlike pic/status_mitra, which are Closing-only) — a blank
+                // field on THIS visit leaves the POI's existing value alone
+                // rather than clearing out a norek/CIF recorded on an earlier
+                // visit (ConvertEmptyStringsToNull already turns an empty
+                // form field into null before validation, so this is a plain
+                // null check, not also an empty-string one).
+                'norek_cif' => $data['norek_cif'] ?? $lockedPoi->norek_cif,
             ]);
         });
 

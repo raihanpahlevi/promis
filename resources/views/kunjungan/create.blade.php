@@ -116,6 +116,12 @@
             </select>
           </div>
 
+          <div class="field" style="margin-bottom:16px">
+            <label style="display:block;font-size:12.5px;font-weight:600;color:var(--brand-700);margin-bottom:6px">Nomor Rekening/CIF (opsional)</label>
+            <input type="text" name="norek_cif" value="{{ old('norek_cif') }}" placeholder="Nomor rekening atau CIF..." autocomplete="off"
+                   style="width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--brand-100);font-size:16px;color:var(--brand-900)">
+          </div>
+
           <div class="field" id="statusMitraField" style="margin-bottom:16px;display:none">
             <label style="display:block;font-size:12.5px;font-weight:600;color:var(--brand-700);margin-bottom:6px">Status mitra baru</label>
             <select name="status_mitra_baru" id="statusMitraSelect"
