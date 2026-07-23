@@ -10,8 +10,10 @@
   /* Two histogram panels side-by-side on desktop, stacked on mobile — the
      existing .grid-2 utility collapses at 1100px with an uneven 1.4fr/1fr
      split (built for a table+chart pairing elsewhere), neither of which fits
-     two equal-width chart panels, so this is a small dedicated variant. */
-  .histogram-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+     two equal-width chart panels, so this is a small dedicated variant.
+     Vertical spacing between THIS and neighboring sections comes from the
+     page's .stack-lg wrapper (2026-07-23), not a margin here. */
+  .histogram-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   @media (max-width:900px){
     .histogram-grid{grid-template-columns:1fr}
   }
@@ -21,239 +23,257 @@
 @section('content')
   @include('laporan._tabs')
 
-  {{--
-    Two visually separate rows on purpose (2026-07-23 layout fix): mixing
-    short single-line filters (date/select) and tall multi-part chip-picker
-    blocks in ONE flex-wrap row broke — flexbox packs short items into
-    whatever horizontal gap is next to a tall neighbor rather than flowing
-    below it, so Terapkan ended up rendered next to a picker's label instead
-    of after the whole block. Row 1 = short filters only. Row 2 = the chip
-    pickers + Terapkan, mirroring the Dashboard kantor-monitor panel's own
-    kantor-monitor-row/kantor-monitor-actions split (Terapkan pinned to the
-    row's end via margin-left:auto, works regardless of how tall the pickers
-    next to it get).
-  --}}
-  <div class="panel" style="margin-bottom:16px;padding:14px 16px">
-    <form method="GET" action="{{ route('laporan.rekap-sales') }}">
-      <input type="hidden" name="mode" value="{{ $mode }}">
-      <div class="filters" style="flex-wrap:wrap;margin-bottom:14px">
-        <input type="date" name="dari" value="{{ $dari }}" style="padding:9px 10px;border-radius:8px;border:1px solid var(--brand-100);font-size:16px">
-        <input type="date" name="sampai" value="{{ $sampai }}" style="padding:9px 10px;border-radius:8px;border:1px solid var(--brand-100);font-size:16px">
-        <select name="unit">
-          <option value="">Semua Unit</option>
-          @foreach ($unitOptions as $unit)
-            <option value="{{ $unit->id }}" @selected($unitId === $unit->id)>{{ $unit->nama }}</option>
-          @endforeach
-        </select>
-        @if ($kantorAreaOptions->isNotEmpty())
-          <select name="area">
-            <option value="">Semua Area</option>
-            @foreach ($kantorAreaOptions as $kantorArea)
-              <option value="{{ $kantorArea }}" @selected($selectedKantorArea === $kantorArea)>{{ $kantorArea }}</option>
-            @endforeach
-          </select>
-        @endif
-      </div>
+  <div class="stack-lg">
+    {{--
+      One panel, two internal rows, visually tied together by a shared
+      heading + divider (2026-07-23 layout pass): row 1 is the short
+      single-line filters (tanggal/unit/area), row 2 is the Cabang-Cluster/
+      Cabang chip pickers + Terapkan. Kept as two rows rather than one flex-
+      wrap row on purpose — mixing short inline filters and tall multi-part
+      picker blocks in a single wrapping row previously broke (flexbox packs
+      short items into whatever horizontal gap is next to a tall neighbor
+      rather than flowing below it, so Terapkan ended up rendered next to a
+      picker's label instead of after the whole block).
+    --}}
+    <div class="panel">
+      <div class="panel-head"><h3>Filter</h3></div>
 
-      <div class="kantor-monitor-row" style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px">
-        @if ($kantorClusterOptions->isNotEmpty())
-          <div style="flex:1;min-width:220px">
-            <small style="color:#8A6B55;font-size:11.5px;display:block;margin-bottom:6px">Cabang-Cluster</small>
-            <div class="kantor-picker-chips" id="clusterChipList"></div>
-            <div class="poi-wrap" style="margin-top:8px;max-width:340px">
-              <i class="bi bi-search poi-icon-left"></i>
-              <input type="text" id="clusterPickerInput" class="autocomplete-input" placeholder="Cari &amp; tambah Cluster..." autocomplete="off">
-              <div id="clusterPickerDropdown" class="autocomplete-dropdown"></div>
-            </div>
+      <form method="GET" action="{{ route('laporan.rekap-sales') }}">
+        <input type="hidden" name="mode" value="{{ $mode }}">
+
+        <div class="filters" style="flex-wrap:wrap">
+          <div class="filter-field">
+            <small class="text-muted">Dari Tanggal</small>
+            <input type="date" name="dari" value="{{ $dari }}">
           </div>
-        @endif
-        @if ($kantorOptions->isNotEmpty())
-          <div style="flex:1;min-width:260px">
-            <small style="color:#8A6B55;font-size:11.5px;display:block;margin-bottom:6px">
-              Cabang <span style="font-weight:400">(kosongkan = {{ auth()->user()->isAdmin() ? 'semua kantor' : 'semua kantor saya' }})</span>
-            </small>
-            <div class="kantor-picker-chips" id="kantorChipList"></div>
-            <div class="poi-wrap" style="margin-top:8px;max-width:340px">
-              <i class="bi bi-search poi-icon-left"></i>
-              <input type="text" id="kantorPickerInput" class="autocomplete-input" placeholder="Cari &amp; tambah Cabang..." autocomplete="off">
-              <div id="kantorPickerDropdown" class="autocomplete-dropdown"></div>
-            </div>
+          <div class="filter-field">
+            <small class="text-muted">Sampai Tanggal</small>
+            <input type="date" name="sampai" value="{{ $sampai }}">
           </div>
-        @endif
-        <div class="kantor-monitor-actions" style="display:flex;align-items:center;gap:10px;margin-left:auto;padding-top:2px">
-          <button type="submit" class="btn-primary-custom" style="width:auto;padding:8px 18px;font-size:12.5px">Terapkan</button>
+          <div class="filter-field">
+            <small class="text-muted">Unit</small>
+            <select name="unit">
+              <option value="">Semua Unit</option>
+              @foreach ($unitOptions as $unit)
+                <option value="{{ $unit->id }}" @selected($unitId === $unit->id)>{{ $unit->nama }}</option>
+              @endforeach
+            </select>
+          </div>
+          @if ($kantorAreaOptions->isNotEmpty())
+            <div class="filter-field">
+              <small class="text-muted">Area</small>
+              <select name="area">
+                <option value="">Semua Area</option>
+                @foreach ($kantorAreaOptions as $kantorArea)
+                  <option value="{{ $kantorArea }}" @selected($selectedKantorArea === $kantorArea)>{{ $kantorArea }}</option>
+                @endforeach
+              </select>
+            </div>
+          @endif
         </div>
+
+        <div class="filter-divider"></div>
+
+        <div class="kantor-monitor-row">
+          @if ($kantorClusterOptions->isNotEmpty())
+            <div class="filter-field" style="flex:1;min-width:220px">
+              <small class="text-muted">Cabang-Cluster</small>
+              <div class="kantor-picker-chips" id="clusterChipList"></div>
+              <div class="poi-wrap" style="max-width:340px">
+                <i class="bi bi-search poi-icon-left"></i>
+                <input type="text" id="clusterPickerInput" class="autocomplete-input" placeholder="Cari &amp; tambah Cluster..." autocomplete="off">
+                <div id="clusterPickerDropdown" class="autocomplete-dropdown"></div>
+              </div>
+            </div>
+          @endif
+          @if ($kantorOptions->isNotEmpty())
+            <div class="filter-field" style="flex:1;min-width:260px">
+              <small class="text-muted">
+                Cabang <span style="font-weight:400">(kosongkan = {{ auth()->user()->isAdmin() ? 'semua kantor' : 'semua kantor saya' }})</span>
+              </small>
+              <div class="kantor-picker-chips" id="kantorChipList"></div>
+              <div class="poi-wrap" style="max-width:340px">
+                <i class="bi bi-search poi-icon-left"></i>
+                <input type="text" id="kantorPickerInput" class="autocomplete-input" placeholder="Cari &amp; tambah Cabang..." autocomplete="off">
+                <div id="kantorPickerDropdown" class="autocomplete-dropdown"></div>
+              </div>
+            </div>
+          @endif
+          <div class="kantor-monitor-actions">
+            <button type="submit" class="btn-primary-custom" style="width:auto;padding:8px 18px;font-size:12.5px">Terapkan</button>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    @php
+      $carryQuery = [
+          'dari' => $dari, 'sampai' => $sampai, 'unit' => $unitId,
+          'area' => $selectedKantorArea, 'cluster' => $selectedKantorClusters, 'kantor' => $selectedKantorIds,
+      ];
+    @endphp
+    <div class="section-tabs" style="margin-bottom:0">
+      <a href="{{ route('laporan.rekap-sales', array_filter($carryQuery + ['mode' => 'kunjungan'])) }}" class="{{ $mode === 'kunjungan' ? 'active' : '' }}">Kunjungan</a>
+      <a href="{{ route('laporan.rekap-sales', array_filter($carryQuery + ['mode' => 'tidak'])) }}" class="{{ $mode === 'tidak' ? 'active' : '' }}">Tidak Kunjungan</a>
+    </div>
+
+    @php $summary = $histogram['summary']; @endphp
+    <div class="stat-grid stat-grid-3">
+      <div class="stat-card hero">
+        <span class="kicker">Total Kunjungan</span>
+        <div class="num" style="font-size:32px;margin-top:8px">{{ number_format($summary['total_kunjungan']) }}</div>
+        <div class="lbl" style="margin-top:2px">Seluruh kunjungan pada rentang &amp; filter kantor ini</div>
       </div>
-    </form>
-  </div>
 
-  @php
-    $carryQuery = [
-        'dari' => $dari, 'sampai' => $sampai, 'unit' => $unitId,
-        'area' => $selectedKantorArea, 'cluster' => $selectedKantorClusters, 'kantor' => $selectedKantorIds,
-    ];
-  @endphp
-  <div class="section-tabs">
-    <a href="{{ route('laporan.rekap-sales', array_filter($carryQuery + ['mode' => 'kunjungan'])) }}" class="{{ $mode === 'kunjungan' ? 'active' : '' }}">Kunjungan</a>
-    <a href="{{ route('laporan.rekap-sales', array_filter($carryQuery + ['mode' => 'tidak'])) }}" class="{{ $mode === 'tidak' ? 'active' : '' }}">Tidak Kunjungan</a>
-  </div>
+      <div class="stat-card accent-danger">
+        <span class="kicker">Belum Kunjungan</span>
+        <div class="num" style="margin-top:8px">{{ number_format($summary['total_tidak']) }}</div>
+        <div class="lbl" style="margin-top:2px">Sales tanpa kunjungan pada rentang ini</div>
+      </div>
 
-  @php $summary = $histogram['summary']; @endphp
-  <div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">
-    <div class="stat-card hero">
-      <span class="kicker">Total Kunjungan</span>
-      <div class="num" style="font-size:32px;margin-top:8px">{{ number_format($summary['total_kunjungan']) }}</div>
-      <div class="lbl" style="margin-top:2px">Seluruh kunjungan pada rentang &amp; filter kantor ini</div>
+      <div class="stat-card">
+        <span class="kicker">Kantor Aktif</span>
+        <div class="num" style="margin-top:8px">{{ $summary['kantor_aktif'] }} / {{ $summary['total_kantor'] }}</div>
+        <div class="lbl" style="margin-top:2px">Kantor dengan minimal 1 kunjungan pada filter ini</div>
+      </div>
     </div>
 
-    <div class="stat-card accent-danger">
-      <span class="kicker">Belum Kunjungan</span>
-      <div class="num" style="margin-top:8px">{{ number_format($summary['total_tidak']) }}</div>
-      <div class="lbl" style="margin-top:2px">Sales tanpa kunjungan pada rentang ini</div>
+    <div class="histogram-grid">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Histogram Visit POI</h3>
+          @if ($mode === 'kunjungan')
+            <span class="badge" style="background:var(--brand-50);color:var(--brand-700)">{{ number_format($summary['total_kunjungan']) }} kunjungan</span>
+          @else
+            <span class="badge badge-no">{{ number_format($summary['total_tidak']) }} belum kunjungan</span>
+          @endif
+        </div>
+        <div class="chart-lg"><canvas id="histUser"></canvas></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Histogram Per Kantor{{ $unitId ? ' ('.$unitOptions->firstWhere('id', $unitId)?->nama.')' : '' }}</h3>
+          <span class="badge" style="background:var(--brand-50);color:var(--brand-700)">{{ $summary['total_kantor'] }} kantor</span>
+        </div>
+        <div class="chart-lg"><canvas id="histKantor"></canvas></div>
+      </div>
     </div>
 
-    <div class="stat-card">
-      <span class="kicker">Kantor Aktif</span>
-      <div class="num" style="margin-top:8px">{{ $summary['kantor_aktif'] }} / {{ $summary['total_kantor'] }}</div>
-      <div class="lbl" style="margin-top:2px">Kantor dengan minimal 1 kunjungan pada filter ini</div>
-    </div>
-  </div>
-
-  <div class="histogram-grid">
-    <div class="panel" style="margin-bottom:0">
-      <div class="panel-head">
-        <h3>Histogram Visit POI</h3>
-        @if ($mode === 'kunjungan')
-          <span class="badge" style="background:var(--brand-50);color:var(--brand-700)">{{ number_format($summary['total_kunjungan']) }} kunjungan</span>
+    <div class="panel">
+      @if ($mode === 'kunjungan')
+        <div class="panel-head"><h3>Ringkasan Kunjungan per Kantor &amp; Unit</h3></div>
+        @if ($kunjunganSummary->isEmpty())
+          <div class="empty-state-rich">
+            <i class="bi bi-clipboard-x"></i>
+            <p>Tidak ada kunjungan pada rentang &amp; filter ini.</p>
+            <small>Coba lebarkan rentang tanggal atau ganti filter unit/kantor.</small>
+          </div>
         @else
-          <span class="badge badge-no">{{ number_format($summary['total_tidak']) }} belum kunjungan</span>
+          <div class="breakdown-grid">
+            @foreach ($kunjunganSummary as $row)
+              <div class="breakdown-card">
+                <div class="panel-head">
+                  <h3>{{ $row['kantor']->nama }}</h3>
+                  <span class="badge" style="background:var(--ok-bg);color:var(--ok)">{{ $row['total'] }} visit</span>
+                </div>
+                <div class="breakdown-card-rows">
+                  @foreach ($row['units'] as $unitRow)
+                    <div class="breakdown-card-row">
+                      <span>{{ $unitRow['nama'] }}</span>
+                      <span><strong>{{ $unitRow['visit'] }}</strong> visit <span class="text-muted">({{ $unitRow['closing'] }} closing)</span></span>
+                    </div>
+                  @endforeach
+                </div>
+              </div>
+            @endforeach
+          </div>
         @endif
-      </div>
-      <div class="chart-lg"><canvas id="histUser"></canvas></div>
+      @else
+        <div class="panel-head"><h3>Ringkasan Tidak Kunjungan per Kantor &amp; Unit</h3></div>
+        @if ($tidakSummary->isEmpty())
+          <div class="empty-state-rich">
+            <i class="bi bi-emoji-smile"></i>
+          </div>
+        @else
+          <div class="breakdown-grid">
+            @foreach ($tidakSummary as $row)
+              <div class="breakdown-card">
+                <div class="panel-head">
+                  <h3>{{ $row['kantor']->nama }}</h3>
+                  <span class="badge badge-no">{{ $row['total'] }} orang</span>
+                </div>
+                <div class="breakdown-card-rows">
+                  @foreach ($row['units'] as $unitRow)
+                    <div class="breakdown-card-row">
+                      <span>{{ $unitRow['nama'] }}</span>
+                      <strong>{{ $unitRow['jumlah'] }}</strong>
+                    </div>
+                  @endforeach
+                </div>
+              </div>
+            @endforeach
+          </div>
+        @endif
+      @endif
     </div>
 
-    <div class="panel" style="margin-bottom:0">
-      <div class="panel-head">
-        <h3>Histogram Per Kantor{{ $unitId ? ' ('.$unitOptions->firstWhere('id', $unitId)?->nama.')' : '' }}</h3>
-        <span class="badge" style="background:var(--brand-50);color:var(--brand-700)">{{ $summary['total_kantor'] }} kantor</span>
-      </div>
-      <div class="chart-lg"><canvas id="histKantor"></canvas></div>
+    <div class="table-panel">
+      @if ($mode === 'kunjungan')
+        <div class="panel-head"><h3>Rekap Kunjungan per Sales</h3></div>
+        @if ($kunjunganRows->isEmpty())
+          <div class="empty-state-rich">
+            <i class="bi bi-clipboard-x"></i>
+            <p>Tidak ada sales dengan kunjungan pada rentang &amp; filter ini.</p>
+            <small>Coba lebarkan rentang tanggal atau ganti filter unit/kantor.</small>
+          </div>
+        @else
+          <div style="overflow-x:auto">
+            <table class="table-ledger table-responsive-stack">
+              <thead>
+                <tr><th>Nama Sales</th><th>Unit</th><th>Kantor</th><th class="num" style="text-align:right">Total Visit</th><th class="num" style="text-align:right">Total Closing</th></tr>
+              </thead>
+              <tbody>
+                @foreach ($kunjunganRows as $u)
+                  <tr>
+                    <td class="cell-heading">{{ $u->nama_lengkap }}</td>
+                    <td data-label="Unit">{{ $u->unit->nama ?? '-' }}</td>
+                    <td data-label="Kantor">{{ $u->kantor->pluck('nama')->join(', ') ?: '-' }}</td>
+                    <td data-label="Total Visit" class="num" style="text-align:right"><strong>{{ $u->total_visit }}</strong></td>
+                    <td data-label="Total Closing" class="num" style="text-align:right">{{ $u->total_closing }}</td>
+                  </tr>
+                @endforeach
+              </tbody>
+            </table>
+          </div>
+        @endif
+      @else
+        <div class="panel-head"><h3>Sales Belum Kunjungan</h3></div>
+        @if ($tidakRows->isEmpty())
+          <div class="empty-state-rich">
+            <i class="bi bi-emoji-smile"></i>
+          </div>
+        @else
+          <div style="overflow-x:auto">
+            <table class="table-ledger table-responsive-stack">
+              <thead>
+                <tr><th>Nama Sales</th><th>Unit</th><th>Kantor</th><th>Status</th></tr>
+              </thead>
+              <tbody>
+                @foreach ($tidakRows as $u)
+                  <tr>
+                    <td class="cell-heading">{{ $u->nama_lengkap }}</td>
+                    <td data-label="Unit">{{ $u->unit->nama ?? '-' }}</td>
+                    <td data-label="Kantor">{{ $u->kantor->pluck('nama')->join(', ') ?: '-' }}</td>
+                    <td data-label="Status"><span class="badge badge-no">Tidak Kunjungan</span></td>
+                  </tr>
+                @endforeach
+              </tbody>
+            </table>
+          </div>
+        @endif
+      @endif
     </div>
-  </div>
-
-  <div class="panel" style="margin-bottom:16px">
-    @if ($mode === 'kunjungan')
-      <div class="panel-head"><h3>Ringkasan Kunjungan per Kantor &amp; Unit</h3></div>
-      @if ($kunjunganSummary->isEmpty())
-        <div class="empty-state-rich">
-          <i class="bi bi-clipboard-x"></i>
-          <p>Tidak ada kunjungan pada rentang &amp; filter ini.</p>
-          <small>Coba lebarkan rentang tanggal atau ganti filter unit/kantor.</small>
-        </div>
-      @else
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px">
-          @foreach ($kunjunganSummary as $row)
-            <div style="border:1.5px solid var(--brand-100);border-radius:12px;padding:14px 16px">
-              <div class="panel-head" style="margin-bottom:10px">
-                <h3>{{ $row['kantor']->nama }}</h3>
-                <span class="badge" style="background:var(--ok-bg);color:var(--ok)">{{ $row['total'] }} visit</span>
-              </div>
-              <div style="display:flex;flex-direction:column;gap:6px">
-                @foreach ($row['units'] as $unitRow)
-                  <div style="display:flex;justify-content:space-between;gap:10px;font-size:13px">
-                    <span>{{ $unitRow['nama'] }}</span>
-                    <span><strong>{{ $unitRow['visit'] }}</strong> visit <span style="color:#8A6B55">({{ $unitRow['closing'] }} closing)</span></span>
-                  </div>
-                @endforeach
-              </div>
-            </div>
-          @endforeach
-        </div>
-      @endif
-    @else
-      <div class="panel-head"><h3>Ringkasan Tidak Kunjungan per Kantor &amp; Unit</h3></div>
-      @if ($tidakSummary->isEmpty())
-        <div class="empty-state-rich">
-          <i class="bi bi-emoji-smile"></i>
-        </div>
-      @else
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px">
-          @foreach ($tidakSummary as $row)
-            <div style="border:1.5px solid var(--brand-100);border-radius:12px;padding:14px 16px">
-              <div class="panel-head" style="margin-bottom:10px">
-                <h3>{{ $row['kantor']->nama }}</h3>
-                <span class="badge badge-no">{{ $row['total'] }} orang</span>
-              </div>
-              <div style="display:flex;flex-direction:column;gap:6px">
-                @foreach ($row['units'] as $unitRow)
-                  <div style="display:flex;justify-content:space-between;gap:10px;font-size:13px">
-                    <span>{{ $unitRow['nama'] }}</span>
-                    <strong>{{ $unitRow['jumlah'] }}</strong>
-                  </div>
-                @endforeach
-              </div>
-            </div>
-          @endforeach
-        </div>
-      @endif
-    @endif
-  </div>
-
-  <div class="table-panel">
-    @if ($mode === 'kunjungan')
-      <div class="panel-head"><h3>Rekap Kunjungan per Sales</h3></div>
-      @if ($kunjunganRows->isEmpty())
-        <div class="empty-state-rich">
-          <i class="bi bi-clipboard-x"></i>
-          <p>Tidak ada sales dengan kunjungan pada rentang &amp; filter ini.</p>
-          <small>Coba lebarkan rentang tanggal atau ganti filter unit/kantor.</small>
-        </div>
-      @else
-        <div style="overflow-x:auto">
-          <table class="table-ledger table-responsive-stack">
-            <thead>
-              <tr><th>Nama Sales</th><th>Unit</th><th>Kantor</th><th class="num" style="text-align:right">Total Visit</th><th class="num" style="text-align:right">Total Closing</th></tr>
-            </thead>
-            <tbody>
-              @foreach ($kunjunganRows as $u)
-                <tr>
-                  <td class="cell-heading">{{ $u->nama_lengkap }}</td>
-                  <td data-label="Unit">{{ $u->unit->nama ?? '-' }}</td>
-                  <td data-label="Kantor">{{ $u->kantor->pluck('nama')->join(', ') ?: '-' }}</td>
-                  <td data-label="Total Visit" class="num" style="text-align:right"><strong>{{ $u->total_visit }}</strong></td>
-                  <td data-label="Total Closing" class="num" style="text-align:right">{{ $u->total_closing }}</td>
-                </tr>
-              @endforeach
-            </tbody>
-          </table>
-        </div>
-      @endif
-    @else
-      <div class="panel-head"><h3>Sales Belum Kunjungan</h3></div>
-      @if ($tidakRows->isEmpty())
-        <div class="empty-state-rich">
-          <i class="bi bi-emoji-smile"></i>
-        </div>
-      @else
-        <div style="overflow-x:auto">
-          <table class="table-ledger table-responsive-stack">
-            <thead>
-              <tr><th>Nama Sales</th><th>Unit</th><th>Kantor</th><th>Status</th></tr>
-            </thead>
-            <tbody>
-              @foreach ($tidakRows as $u)
-                <tr>
-                  <td class="cell-heading">{{ $u->nama_lengkap }}</td>
-                  <td data-label="Unit">{{ $u->unit->nama ?? '-' }}</td>
-                  <td data-label="Kantor">{{ $u->kantor->pluck('nama')->join(', ') ?: '-' }}</td>
-                  <td data-label="Status"><span class="badge badge-no">Tidak Kunjungan</span></td>
-                </tr>
-              @endforeach
-            </tbody>
-          </table>
-        </div>
-      @endif
-    @endif
   </div>
 
   @push('scripts')

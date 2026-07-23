@@ -146,6 +146,12 @@ body{
 .content{padding:24px 28px}
 
 .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}
+/* 3-card variant (Rekap Sales) — a plain inline `style="grid-template-
+   columns:repeat(3,1fr)"` would always beat the @media rules below it
+   (equal specificity, inline wins), so on mobile it never collapsed past 3
+   columns. This class sits before those @media blocks in source order, so
+   they still override it at narrower widths as intended. */
+.stat-grid-3{grid-template-columns:repeat(3,1fr)}
 .stat-card{
   background:#fff;border:1px solid var(--brand-100);border-radius:16px;padding:18px 20px;
   display:flex;flex-direction:column;gap:10px;
@@ -166,6 +172,9 @@ body{
 .filters{display:flex;gap:8px;flex-wrap:wrap}
 .filters select{
   font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--brand-100);color:var(--brand-700);background:var(--brand-50);
+}
+.filters input[type="date"]{
+  padding:9px 10px;border-radius:8px;border:1px solid var(--brand-100);font-size:16px;
 }
 .legend-row{display:flex;gap:16px;margin-top:14px;font-size:12px}
 .legend-row span{display:flex;align-items:center;gap:6px;color:#8A6B55}
@@ -286,6 +295,36 @@ tbody tr:hover{background:var(--brand-50)}
   padding:3px 7px;border-radius:50%;
 }
 .kantor-picker-chip-remove:hover{background:var(--brand-100);color:var(--brand-900)}
+/* Base (desktop) layout for the row a chip picker's Terapkan/action button
+   sits in — .kantor-monitor-row/.kantor-monitor-actions were previously
+   only referenced by the @media(max-width:640px) stacking rule further
+   below, with identical inline styles repeated on every page that used
+   them (Dashboard, Rekap Sales); centralizing the base styles here means
+   any page can just use the class names. */
+.kantor-monitor-row{display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px}
+.kantor-monitor-actions{display:flex;align-items:center;gap:10px;margin-left:auto;padding-top:2px}
+
+/* ---- Rekap Sales: consistent section rhythm + filter panel/breakdown card
+   grouping (2026-07-23 layout pass). Reused nowhere else yet, but generic
+   enough to apply to any future stacked-panels page. ---- */
+.stack-lg > * + *{margin-top:22px}
+
+.filter-field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.filter-field > small{display:block}
+.filter-divider{height:1px;background:var(--brand-100);margin:18px 0}
+
+.breakdown-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.breakdown-card{
+  border:1.5px solid var(--brand-100);border-radius:12px;padding:14px 16px;
+  display:flex;flex-direction:column;
+}
+.breakdown-card .panel-head{margin-bottom:10px}
+.breakdown-card-rows{display:flex;flex-direction:column;gap:2px}
+.breakdown-card-row{
+  display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px;
+  padding:6px 0;border-bottom:1px solid var(--brand-50);
+}
+.breakdown-card-row:last-child{border-bottom:none}
 
 @media (max-width:760px){
   .produk-checkbox-grid{grid-template-columns:repeat(2,1fr)}
@@ -523,3 +562,4 @@ table.table-ledger tbody td{padding:10px 12px;font-size:12.5px}
   }
   .table-responsive-stack td.cell-actions::before{content:none}
 }
+
