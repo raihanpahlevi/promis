@@ -580,9 +580,23 @@ table.table-ledger tbody td{padding:10px 12px;font-size:12.5px}
   from{opacity:0;transform:translateY(10px)}
   to{opacity:1;transform:translateY(0)}
 }
+/* fill-mode `backwards` (NOT `both`/`forwards`) is load-bearing: a
+   persisted end-state transform makes every panel a permanent stacking
+   context, which traps the autocomplete dropdowns' z-index inside their
+   panel — reported in production as the Dashboard picker dropdown
+   rendering behind the Total POI stat card. `backwards` still hides the
+   element through its stagger delay, but releases the transform the
+   moment the animation ends. */
 .stat-card,.panel,.table-panel{
-  animation:fade-rise-in 320ms cubic-bezier(.22,1,.36,1) both;
+  animation:fade-rise-in 320ms cubic-bezier(.22,1,.36,1) backwards;
 }
+/* Safety net for the window where a transform IS legitimately applied
+   (entrance still running, hover lift on a neighboring card): a panel
+   with an open picker dropdown always wins the paint order. #poiDropdown
+   (Catat Kunjungan) predates the shared .autocomplete-dropdown class and
+   doesn't carry it, hence the second selector. */
+:is(.panel,.table-panel):has(.autocomplete-dropdown.open),
+:is(.panel,.table-panel):has(#poiDropdown.open){position:relative;z-index:30}
 /* Stagger: same small delay ladder reused across every grid/stack wrapper
    already in use site-wide, so pages compose it automatically without
    per-page markup. Capped at 6 steps — data-driven repeaters (breakdown
