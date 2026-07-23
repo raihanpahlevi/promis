@@ -517,4 +517,60 @@ class PoiTest extends TestCase
         $this->assertSame(0, $rowA->total_poi ?? 0, 'Kantor A must NOT be touched — the POI was never counted there.');
         $this->assertSame(1, $rowB->total_poi, 'Kantor B should be incremented — that is where it is counted now.');
     }
+
+    // ---------------- Hard delete (admin only) ----------------
+
+    public function test_admin_can_hard_delete_a_poi_and_its_kunjungan_cascade_away(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $sales = User::factory()->create(['force_password_change' => false, 'role' => User::ROLE_SALES]);
+        $kantor = Kantor::create(['kode' => 'X', 'nama' => 'Kantor X']);
+        $poi = $this->makePoi($kantor);
+        $kunjungan = \App\Models\Kunjungan::create([
+            'poi_id' => $poi->id, 'sales_id' => $sales->id,
+            'tanggal_kunjungan' => now()->toDateString(),
+            'hasil' => \App\Models\Kunjungan::HASIL_CLOSING,
+        ]);
+
+        $response = $this->actingAs($admin)->delete("/poi/{$poi->id}");
+
+        $response->assertRedirect(route('poi.index'));
+        $this->assertDatabaseMissing('poi', ['id' => $poi->id]);
+        $this->assertDatabaseMissing('kunjungan', ['id' => $kunjungan->id]);
+    }
+
+    public function test_hard_deleting_an_aktif_poi_decrements_the_dashboard_summary(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $kantor = Kantor::create(['kode' => 'X', 'nama' => 'Kantor X']);
+        $poi = $this->makePoi($kantor);
+
+        $this->assertSame(1, DashboardSummary::where('kantor_id', $kantor->id)->first()->total_poi);
+
+        $this->actingAs($admin)->delete("/poi/{$poi->id}");
+
+        $this->assertSame(0, DashboardSummary::where('kantor_id', $kantor->id)->first()->total_poi);
+    }
+
+    public function test_admin_final_cannot_hard_delete_a_poi_even_of_their_own_kantor(): void
+    {
+        $kantor = Kantor::create(['kode' => 'X', 'nama' => 'Kantor X']);
+        $adminFinal = User::factory()->adminFinal()->create(['force_password_change' => false]);
+        $adminFinal->kantor()->attach($kantor->id);
+        $poi = $this->makePoi($kantor);
+
+        $this->actingAs($adminFinal)->delete("/poi/{$poi->id}")->assertForbidden();
+        $this->assertDatabaseHas('poi', ['id' => $poi->id]);
+    }
+
+    public function test_sales_cannot_hard_delete_a_poi(): void
+    {
+        $kantor = Kantor::create(['kode' => 'X', 'nama' => 'Kantor X']);
+        $sales = User::factory()->create(['force_password_change' => false, 'role' => User::ROLE_SALES]);
+        $sales->kantor()->attach($kantor->id);
+        $poi = $this->makePoi($kantor);
+
+        $this->actingAs($sales)->delete("/poi/{$poi->id}")->assertForbidden();
+        $this->assertDatabaseHas('poi', ['id' => $poi->id]);
+    }
 }

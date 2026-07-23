@@ -33,3 +33,10 @@ Route::middleware('role:admin,admin_final')->group(function () {
     Route::post('/poi/{poi}/hapus', [PoiController::class, 'destroy'])->name('poi.destroy');
     Route::post('/poi/{poi}/reopen', [PoiController::class, 'reopen'])->name('poi.reopen');
 });
+
+// Hard delete: admin only (stricter than the soft hapus above) — it takes the
+// POI's entire kunjungan history down with it via cascade, which is reporting
+// data an admin_final shouldn't be able to erase for their own kantor.
+Route::middleware('role:admin')->group(function () {
+    Route::delete('/poi/{poi}', [PoiController::class, 'destroyPermanent'])->name('poi.destroy-permanent');
+});

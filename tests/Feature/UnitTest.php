@@ -100,4 +100,40 @@ class UnitTest extends TestCase
 
         $response->assertOk()->assertSee('AKTIF')->assertDontSee('NONAKTIF');
     }
+
+    // ---------------- Hard delete (nonaktif-gated) ----------------
+
+    public function test_an_active_unit_cannot_be_deleted(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $unit = Unit::create(['nama' => 'MASIH AKTIF', 'is_active' => true]);
+
+        $response = $this->actingAs($admin)->delete("/unit/{$unit->id}");
+
+        $response->assertSessionHasErrors('unit');
+        $this->assertDatabaseHas('unit', ['id' => $unit->id]);
+    }
+
+    public function test_an_inactive_unit_can_be_deleted_and_users_lose_the_assignment(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $unit = Unit::create(['nama' => 'BEKAS', 'is_active' => false]);
+        $user = User::factory()->create(['force_password_change' => false, 'unit_id' => $unit->id]);
+
+        $response = $this->actingAs($admin)->delete("/unit/{$unit->id}");
+
+        $response->assertRedirect();
+        $response->assertSessionHas('status');
+        $this->assertDatabaseMissing('unit', ['id' => $unit->id]);
+        $this->assertNull($user->fresh()->unit_id, 'users.unit_id is nullOnDelete — the user keeps existing, just without a unit.');
+    }
+
+    public function test_non_admin_cannot_delete_a_unit(): void
+    {
+        $adminFinal = User::factory()->adminFinal()->create(['force_password_change' => false]);
+        $unit = Unit::create(['nama' => 'TARGET', 'is_active' => false]);
+
+        $this->actingAs($adminFinal)->delete("/unit/{$unit->id}")->assertForbidden();
+        $this->assertDatabaseHas('unit', ['id' => $unit->id]);
+    }
 }

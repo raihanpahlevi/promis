@@ -69,6 +69,25 @@
         @endif
       </div>
 
+      @if (auth()->user()->isAdmin())
+        <div class="panel" style="border-color:var(--danger)">
+          <div class="panel-head"><h3 style="color:var(--danger)">Hapus Permanen</h3></div>
+          <p style="font-size:12.5px;color:#8A6B55;margin:0 0 12px">
+            Menghapus POI ini dari database secara permanen, termasuk
+            <b>{{ $kunjunganCount }} kunjungan</b> yang terkait dan seluruh riwayat hapus/reopen-nya.
+            Tidak bisa dibatalkan. Untuk sekadar menyembunyikan dari daftar, gunakan Nonaktifkan di atas.
+          </p>
+          <form method="POST" action="{{ route('poi.destroy-permanent', $poi) }}"
+                onsubmit="return confirm('Hapus permanen POI {{ $poi->nama_poi }} beserta {{ $kunjunganCount }} kunjungan terkait? Aksi ini tidak bisa dibatalkan.');">
+            @csrf
+            @method('DELETE')
+            <button type="submit" class="btn-primary-custom" style="width:auto;padding:10px 18px;background:var(--danger)">
+              <i class="bi bi-trash3"></i> Hapus Permanen
+            </button>
+          </form>
+        </div>
+      @endif
+
       <div class="table-panel">
         <div class="panel-head"><h3>Riwayat Hapus / Reopen</h3></div>
         @if ($poi->reopenLogs->isEmpty())

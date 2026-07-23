@@ -143,6 +143,7 @@ class PoiController extends Controller
             'sektorOptions' => Poi::SEKTOR_OPTIONS,
             'areaOptions' => Poi::AREA_OPTIONS,
             'statusMitraOptions' => Poi::STATUS_MITRA_OPTIONS,
+            'kunjunganCount' => $poi->kunjungan()->count(),
         ]);
     }
 
@@ -190,6 +191,31 @@ class PoiController extends Controller
         });
 
         return redirect()->route('poi.index')->with('status', 'POI berhasil dinonaktifkan.');
+    }
+
+    /**
+     * Hard delete (added 2026-07-23 at product request — nonaktif rows were
+     * accumulating as junk with no way to actually remove them). Unlike
+     * destroy() above this is a real DB delete: kunjungan (+produk),
+     * poi_reopen_log, and geocode_failed rows all cascade away with it, so
+     * the route is role:admin only (see routes/poi.php). No "must be
+     * nonaktif first" gate on purpose — the whole point is a direct delete,
+     * and the confirm dialog in the edit view carries the warning instead.
+     * Eloquent delete() (not a query-builder delete) so PoiObserver::deleted()
+     * keeps dashboard_summary in sync for still-aktif rows.
+     */
+    public function destroyPermanent(Request $request, Poi $poi): RedirectResponse
+    {
+        $this->ensureKantorAccess($request->user(), $poi->kantor_id);
+
+        $nama = $poi->nama_poi;
+        $kunjunganCount = $poi->kunjungan()->count();
+
+        $poi->delete();
+
+        $suffix = $kunjunganCount > 0 ? " {$kunjunganCount} kunjungan terkait ikut terhapus." : '';
+
+        return redirect()->route('poi.index')->with('status', "POI {$nama} berhasil dihapus permanen.{$suffix}");
     }
 
     public function reopen(Request $request, Poi $poi): RedirectResponse

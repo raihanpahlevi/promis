@@ -62,12 +62,24 @@
                 @endif
               </td>
               <td>
-                <form method="POST" action="{{ route('unit.toggle-active', $unit) }}">
-                  @csrf
-                  <button type="submit" style="border:none;background:none;color:var(--brand-500);cursor:pointer;font-size:12px;text-decoration:underline">
-                    {{ $unit->is_active ? 'Nonaktifkan' : 'Aktifkan' }}
-                  </button>
-                </form>
+                <div style="display:flex;gap:14px;align-items:center">
+                  <form method="POST" action="{{ route('unit.toggle-active', $unit) }}">
+                    @csrf
+                    <button type="submit" style="border:none;background:none;color:var(--brand-500);cursor:pointer;font-size:12px;text-decoration:underline">
+                      {{ $unit->is_active ? 'Nonaktifkan' : 'Aktifkan' }}
+                    </button>
+                  </form>
+                  @unless ($unit->is_active)
+                    <form method="POST" action="{{ route('unit.destroy', $unit) }}"
+                          onsubmit="return confirm('Hapus permanen unit {{ $unit->nama }}? User yang masih memakai unit ini akan kehilangan unit-nya. Aksi ini tidak bisa dibatalkan.');">
+                      @csrf
+                      @method('DELETE')
+                      <button type="submit" style="border:none;background:none;color:var(--danger);cursor:pointer;font-size:12px;text-decoration:underline">
+                        <i class="bi bi-trash3"></i> Hapus
+                      </button>
+                    </form>
+                  @endunless
+                </div>
               </td>
             </tr>
           @endforeach

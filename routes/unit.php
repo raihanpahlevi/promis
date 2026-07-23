@@ -8,4 +8,5 @@ Route::middleware('role:admin')->group(function () {
     Route::post('/unit', [UnitController::class, 'store'])->name('unit.store');
     Route::put('/unit/{unit}', [UnitController::class, 'update'])->name('unit.update');
     Route::post('/unit/{unit}/toggle-active', [UnitController::class, 'toggleActive'])->name('unit.toggle-active');
+    Route::delete('/unit/{unit}', [UnitController::class, 'destroy'])->name('unit.destroy');
 });
