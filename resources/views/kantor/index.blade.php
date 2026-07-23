@@ -11,14 +11,6 @@
     <div class="form-error">{{ $errors->first() }}</div>
   @endif
 
-  <p style="font-size:12.5px;color:#8A6B55;margin-top:-8px;margin-bottom:16px">
-    Area &amp; Cabang-Cluster otomatis kesimpen di sini setiap kali import Data POI yang kolom
-    Cabang-nya cocok (nggak perlu import terpisah). Halaman ini buat fix cepat satu-dua Cabang, atau
-    bulk-edit tanpa upload ulang file POI-nya. <b>Yang perlu diinget:</b> mengetik nama Cabang yang
-    beda di file import POI bikin Cabang <b>baru</b>, bukan mengganti yang lama &mdash; kalau cuma
-    mau rename Cabang yang sudah ada, edit lewat sini (atau Export dari sini, edit, Import balik).
-  </p>
-
   <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
     <a href="{{ route('export.kantor.download') }}" class="btn-primary-custom" style="text-decoration:none;background:transparent;color:var(--brand-700);border:1.5px solid var(--brand-100);padding:9px 16px;width:auto">
       <i class="bi bi-download"></i> Export Excel
