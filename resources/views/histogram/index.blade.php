@@ -13,10 +13,26 @@
     <div class="filters" style="flex-wrap:wrap">
       <input type="date" name="dari" value="{{ $dari }}" style="padding:9px 10px;border-radius:8px;border:1px solid var(--brand-100);font-size:16px">
       <input type="date" name="sampai" value="{{ $sampai }}" style="padding:9px 10px;border-radius:8px;border:1px solid var(--brand-100);font-size:16px">
+      @if ($kantorAreaOptions->isNotEmpty())
+        <select name="area">
+          <option value="">Semua Area</option>
+          @foreach ($kantorAreaOptions as $kantorArea)
+            <option value="{{ $kantorArea }}" @selected($selectedKantorArea === $kantorArea)>{{ $kantorArea }}</option>
+          @endforeach
+        </select>
+      @endif
+      @if ($kantorClusterOptions->isNotEmpty())
+        <select name="cluster">
+          <option value="">Semua Cabang-Cluster</option>
+          @foreach ($kantorClusterOptions as $kantorCluster)
+            <option value="{{ $kantorCluster }}" @selected($selectedKantorCluster === $kantorCluster)>{{ $kantorCluster }}</option>
+          @endforeach
+        </select>
+      @endif
       @if ($kantorOptions->isNotEmpty())
         <select name="kantor" @disabled($kantorLocked)>
           @unless ($kantorLocked)
-            <option value="">{{ auth()->user()->isAdmin() ? 'Semua Kantor' : 'Semua Kantor Saya' }}</option>
+            <option value="">{{ auth()->user()->isAdmin() ? 'Semua Cabang' : 'Semua Cabang Saya' }}</option>
           @endunless
           @foreach ($kantorOptions as $kantor)
             <option value="{{ $kantor->id }}" @selected($selectedKantorId === $kantor->id)>{{ $kantor->nama }}</option>

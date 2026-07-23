@@ -82,6 +82,28 @@ class HistogramTest extends TestCase
         $response->assertViewHas('detail', fn ($detail) => $detail->total() === 0);
     }
 
+    public function test_area_filter_narrows_the_histogram_scope(): void
+    {
+        $jakarta = Kantor::create(['kode' => 'A', 'nama' => 'Cabang Jakarta', 'area' => 'Area Jakarta']);
+        $bandung = Kantor::create(['kode' => 'B', 'nama' => 'Cabang Bandung', 'area' => 'Area Jabar']);
+        $sales = User::factory()->create(['force_password_change' => false]);
+
+        Kunjungan::create([
+            'poi_id' => $this->poi($jakarta)->id, 'sales_id' => $sales->id,
+            'tanggal_kunjungan' => now()->toDateString(), 'hasil' => Kunjungan::HASIL_CLOSING,
+        ]);
+        Kunjungan::create([
+            'poi_id' => $this->poi($bandung)->id, 'sales_id' => $sales->id,
+            'tanggal_kunjungan' => now()->toDateString(), 'hasil' => Kunjungan::HASIL_CLOSING,
+        ]);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $response = $this->actingAs($admin)->get('/histogram?area='.urlencode('Area Jakarta'));
+
+        $response->assertOk();
+        $response->assertViewHas('histogram', fn ($h) => $h['closing'] === [1]);
+    }
+
     public function test_histogram_counts_distinct_poi_per_day_not_raw_visits(): void
     {
         $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);

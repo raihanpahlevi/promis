@@ -21,36 +21,77 @@
 @section('content')
   @include('laporan._tabs')
 
-  <form method="GET" action="{{ route('laporan.rekap-sales') }}" style="margin-bottom:16px">
-    <input type="hidden" name="mode" value="{{ $mode }}">
-    <div class="filters" style="flex-wrap:wrap;align-items:flex-start">
-      <input type="date" name="dari" value="{{ $dari }}" style="padding:9px 10px;border-radius:8px;border:1px solid var(--brand-100);font-size:16px">
-      <input type="date" name="sampai" value="{{ $sampai }}" style="padding:9px 10px;border-radius:8px;border:1px solid var(--brand-100);font-size:16px">
-      <select name="unit">
-        <option value="">Semua Unit</option>
-        @foreach ($unitOptions as $unit)
-          <option value="{{ $unit->id }}" @selected($unitId === $unit->id)>{{ $unit->nama }}</option>
-        @endforeach
-      </select>
-      @if ($kantorOptions->isNotEmpty())
-        <div style="min-width:260px">
-          <small style="color:#8A6B55;font-size:11.5px;display:block;margin-bottom:6px">
-            Kantor <span style="font-weight:400">(kosongkan = {{ auth()->user()->isAdmin() ? 'semua kantor' : 'semua kantor saya' }})</span>
-          </small>
-          <div class="kantor-picker-chips" id="kantorChipList"></div>
-          <div class="poi-wrap" style="margin-top:8px;max-width:340px">
-            <i class="bi bi-search poi-icon-left"></i>
-            <input type="text" id="kantorPickerInput" class="autocomplete-input" placeholder="Cari &amp; tambah kantor..." autocomplete="off">
-            <div id="kantorPickerDropdown" class="autocomplete-dropdown"></div>
+  {{--
+    Two visually separate rows on purpose (2026-07-23 layout fix): mixing
+    short single-line filters (date/select) and tall multi-part chip-picker
+    blocks in ONE flex-wrap row broke — flexbox packs short items into
+    whatever horizontal gap is next to a tall neighbor rather than flowing
+    below it, so Terapkan ended up rendered next to a picker's label instead
+    of after the whole block. Row 1 = short filters only. Row 2 = the chip
+    pickers + Terapkan, mirroring the Dashboard kantor-monitor panel's own
+    kantor-monitor-row/kantor-monitor-actions split (Terapkan pinned to the
+    row's end via margin-left:auto, works regardless of how tall the pickers
+    next to it get).
+  --}}
+  <div class="panel" style="margin-bottom:16px;padding:14px 16px">
+    <form method="GET" action="{{ route('laporan.rekap-sales') }}">
+      <input type="hidden" name="mode" value="{{ $mode }}">
+      <div class="filters" style="flex-wrap:wrap;margin-bottom:14px">
+        <input type="date" name="dari" value="{{ $dari }}" style="padding:9px 10px;border-radius:8px;border:1px solid var(--brand-100);font-size:16px">
+        <input type="date" name="sampai" value="{{ $sampai }}" style="padding:9px 10px;border-radius:8px;border:1px solid var(--brand-100);font-size:16px">
+        <select name="unit">
+          <option value="">Semua Unit</option>
+          @foreach ($unitOptions as $unit)
+            <option value="{{ $unit->id }}" @selected($unitId === $unit->id)>{{ $unit->nama }}</option>
+          @endforeach
+        </select>
+        @if ($kantorAreaOptions->isNotEmpty())
+          <select name="area">
+            <option value="">Semua Area</option>
+            @foreach ($kantorAreaOptions as $kantorArea)
+              <option value="{{ $kantorArea }}" @selected($selectedKantorArea === $kantorArea)>{{ $kantorArea }}</option>
+            @endforeach
+          </select>
+        @endif
+      </div>
+
+      <div class="kantor-monitor-row" style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px">
+        @if ($kantorClusterOptions->isNotEmpty())
+          <div style="flex:1;min-width:220px">
+            <small style="color:#8A6B55;font-size:11.5px;display:block;margin-bottom:6px">Cabang-Cluster</small>
+            <div class="kantor-picker-chips" id="clusterChipList"></div>
+            <div class="poi-wrap" style="margin-top:8px;max-width:340px">
+              <i class="bi bi-search poi-icon-left"></i>
+              <input type="text" id="clusterPickerInput" class="autocomplete-input" placeholder="Cari &amp; tambah Cluster..." autocomplete="off">
+              <div id="clusterPickerDropdown" class="autocomplete-dropdown"></div>
+            </div>
           </div>
+        @endif
+        @if ($kantorOptions->isNotEmpty())
+          <div style="flex:1;min-width:260px">
+            <small style="color:#8A6B55;font-size:11.5px;display:block;margin-bottom:6px">
+              Cabang <span style="font-weight:400">(kosongkan = {{ auth()->user()->isAdmin() ? 'semua kantor' : 'semua kantor saya' }})</span>
+            </small>
+            <div class="kantor-picker-chips" id="kantorChipList"></div>
+            <div class="poi-wrap" style="margin-top:8px;max-width:340px">
+              <i class="bi bi-search poi-icon-left"></i>
+              <input type="text" id="kantorPickerInput" class="autocomplete-input" placeholder="Cari &amp; tambah Cabang..." autocomplete="off">
+              <div id="kantorPickerDropdown" class="autocomplete-dropdown"></div>
+            </div>
+          </div>
+        @endif
+        <div class="kantor-monitor-actions" style="display:flex;align-items:center;gap:10px;margin-left:auto;padding-top:2px">
+          <button type="submit" class="btn-primary-custom" style="width:auto;padding:8px 18px;font-size:12.5px">Terapkan</button>
         </div>
-      @endif
-      <button type="submit" class="btn-primary-custom" style="padding:10px 16px;font-size:13px;width:auto">Terapkan</button>
-    </div>
-  </form>
+      </div>
+    </form>
+  </div>
 
   @php
-    $carryQuery = ['dari' => $dari, 'sampai' => $sampai, 'unit' => $unitId, 'kantor' => $selectedKantorIds];
+    $carryQuery = [
+        'dari' => $dari, 'sampai' => $sampai, 'unit' => $unitId,
+        'area' => $selectedKantorArea, 'cluster' => $selectedKantorClusters, 'kantor' => $selectedKantorIds,
+    ];
   @endphp
   <div class="section-tabs">
     <a href="{{ route('laporan.rekap-sales', array_filter($carryQuery + ['mode' => 'kunjungan'])) }}" class="{{ $mode === 'kunjungan' ? 'active' : '' }}">Kunjungan</a>
@@ -217,41 +258,44 @@
 
   @push('scripts')
   <script>
-    // Multi-kantor filter chip picker — same component/logic as the
-    // dashboard's kantor monitor picker (resources/views/dashboard.blade.php)
-    // for a consistent look, wired to this page's own filter form instead of
-    // a standalone one.
-    (function () {
-      var chipList = document.getElementById('kantorChipList');
-      var input = document.getElementById('kantorPickerInput');
-      if (!input) return;
+    // Shared multi-select chip picker (search + add + removable chips) —
+    // same component as the dashboard's kantor monitor picker
+    // (resources/views/dashboard.blade.php), generalized (2026-07-23) so a
+    // second instance (Cabang-Cluster, string ids) doesn't have to duplicate
+    // the whole search/keyboard-nav/chip-render logic. `id` is always
+    // compared as a string so it works for both numeric kantor ids and
+    // cluster name strings.
+    function initChipPicker(cfg) {
+      var chipList = document.getElementById(cfg.chipListId);
+      var input = document.getElementById(cfg.inputId);
+      if (!chipList || !input) return;
 
-      var kantorData = @json($kantorOptions->map(fn ($k) => ['id' => $k->id, 'label' => $k->nama]));
-      var selectedIds = @json($selectedKantorIds);
-      var dropdown = document.getElementById('kantorPickerDropdown');
+      var dropdown = document.getElementById(cfg.dropdownId);
+      var data = cfg.data;
+      var selectedIds = cfg.selectedIds.map(String);
 
-      var selected = kantorData.filter(function (k) { return selectedIds.indexOf(k.id) !== -1; });
+      var selected = data.filter(function (k) { return selectedIds.indexOf(String(k.id)) !== -1; });
       var currentVisible = [];
       var highlighted = -1;
 
       function escHtml(str) {
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
       }
 
       function availableOptions() {
-        var selectedIdSet = selected.map(function (s) { return s.id; });
-        return kantorData.filter(function (k) { return selectedIdSet.indexOf(k.id) === -1; });
+        var selectedIdSet = selected.map(function (s) { return String(s.id); });
+        return data.filter(function (k) { return selectedIdSet.indexOf(String(k.id)) === -1; });
       }
 
       function renderChips() {
         if (selected.length === 0) {
-          chipList.innerHTML = '<span style="font-size:12px;color:#8A6B55">Belum ada kantor dipilih &mdash; menampilkan semua.</span>';
+          chipList.innerHTML = '<span style="font-size:12px;color:#8A6B55">' + cfg.emptyText + '</span>';
           return;
         }
         chipList.innerHTML = selected.map(function (k) {
           return '<span class="kantor-picker-chip">' + escHtml(k.label)
-            + '<input type="hidden" name="kantor[]" value="' + k.id + '">'
-            + '<button type="button" class="kantor-picker-chip-remove" data-id="' + k.id + '" aria-label="Hapus ' + escHtml(k.label) + '">&times;</button></span>';
+            + '<input type="hidden" name="' + cfg.fieldName + '" value="' + escHtml(k.id) + '">'
+            + '<button type="button" class="kantor-picker-chip-remove" data-id="' + escHtml(k.id) + '" aria-label="Hapus ' + escHtml(k.label) + '">&times;</button></span>';
         }).join('');
       }
 
@@ -264,26 +308,26 @@
 
         if (currentVisible.length === 0) {
           dropdown.innerHTML = '<div class="poi-option no-result">'
-            + (pool.length === 0 ? 'Semua kantor sudah dipilih' : 'Kantor tidak ditemukan') + '</div>';
+            + (pool.length === 0 ? cfg.allSelectedText : cfg.noResultText) + '</div>';
         } else {
-          dropdown.innerHTML = currentVisible.map(function (k, i) {
-            return '<div class="poi-option" data-id="' + k.id + '" data-idx="' + i + '">' + escHtml(k.label) + '</div>';
+          dropdown.innerHTML = currentVisible.map(function (k) {
+            return '<div class="poi-option" data-id="' + escHtml(k.id) + '">' + escHtml(k.label) + '</div>';
           }).join('');
         }
         highlighted = -1;
       }
 
-      function addKantor(id) {
-        var item = kantorData.find(function (k) { return k.id === id; });
-        if (!item || selected.some(function (s) { return s.id === id; })) return;
+      function addItem(id) {
+        var item = data.find(function (k) { return String(k.id) === String(id); });
+        if (!item || selected.some(function (s) { return String(s.id) === String(id); })) return;
         selected.push(item);
         renderChips();
         input.value = '';
         renderDropdown('');
       }
 
-      function removeKantor(id) {
-        selected = selected.filter(function (s) { return s.id !== id; });
+      function removeItem(id) {
+        selected = selected.filter(function (s) { return String(s.id) !== String(id); });
         renderChips();
         renderDropdown(input.value);
       }
@@ -324,27 +368,47 @@
         } else if (e.key === 'Enter') {
           e.preventDefault();
           if (highlighted >= 0 && highlighted < currentVisible.length) {
-            addKantor(currentVisible[highlighted].id);
+            addItem(currentVisible[highlighted].id);
           } else if (currentVisible.length === 1) {
-            addKantor(currentVisible[0].id);
+            addItem(currentVisible[0].id);
           }
         } else if (e.key === 'Escape') {
           dropdown.classList.remove('open');
         } else if (e.key === 'Backspace' && input.value === '' && selected.length) {
-          removeKantor(selected[selected.length - 1].id);
+          removeItem(selected[selected.length - 1].id);
         }
       });
       dropdown.addEventListener('mousedown', function (e) {
         var opt = e.target.closest('.poi-option[data-id]');
-        if (opt) addKantor(parseInt(opt.dataset.id, 10));
+        if (opt) addItem(opt.dataset.id);
       });
       chipList.addEventListener('click', function (e) {
         var btn = e.target.closest('.kantor-picker-chip-remove');
-        if (btn) removeKantor(parseInt(btn.dataset.id, 10));
+        if (btn) removeItem(btn.dataset.id);
       });
 
       renderChips();
-    })();
+    }
+
+    initChipPicker({
+      chipListId: 'kantorChipList', inputId: 'kantorPickerInput', dropdownId: 'kantorPickerDropdown',
+      data: @json($kantorOptions->map(fn ($k) => ['id' => $k->id, 'label' => $k->nama])),
+      selectedIds: @json($selectedKantorIds),
+      fieldName: 'kantor[]',
+      emptyText: 'Belum ada Cabang dipilih &mdash; menampilkan semua.',
+      noResultText: 'Cabang tidak ditemukan',
+      allSelectedText: 'Semua Cabang sudah dipilih',
+    });
+
+    initChipPicker({
+      chipListId: 'clusterChipList', inputId: 'clusterPickerInput', dropdownId: 'clusterPickerDropdown',
+      data: @json($kantorClusterOptions->map(fn ($c) => ['id' => $c, 'label' => $c])),
+      selectedIds: @json($selectedKantorClusters),
+      fieldName: 'cluster[]',
+      emptyText: 'Belum ada Cabang-Cluster dipilih &mdash; menampilkan semua.',
+      noResultText: 'Cabang-Cluster tidak ditemukan',
+      allSelectedText: 'Semua Cabang-Cluster sudah dipilih',
+    });
 
     Chart.register(ChartDataLabels);
 

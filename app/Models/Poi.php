@@ -38,11 +38,15 @@ class Poi extends Model
 
     protected $table = 'poi';
 
+    // 2026-07-23: dropped the "(0 - 1 Km)" etc distance suffix — Ring Area
+    // is now just "Ring 1".."Ring 4" everywhere (import, forms, dashboard
+    // breakdown). Data was already cleansed before this change shipped, so
+    // no migration backfilling old "Ring 1 (0 - 1 Km)"-style strings exists.
     public const AREA_OPTIONS = [
-        'Ring 1 (0 - 1 Km)',
-        'Ring 2 (>1 - 3 Km)',
-        'Ring 3 (>3 - 5 Km)',
-        'Ring 4 (> 5 Km)',
+        'Ring 1',
+        'Ring 2',
+        'Ring 3',
+        'Ring 4',
     ];
 
     public const STATUS_MITRA_OPTIONS = [

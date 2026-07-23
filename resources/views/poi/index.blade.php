@@ -33,9 +33,25 @@
           <input type="text" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Cari nama, alamat, atau PIC...">
         </div>
         <div class="filters" style="flex-wrap:wrap">
+          @if ($kantorAreaOptions->isNotEmpty())
+            <select name="area" onchange="this.form.submit()">
+              <option value="">Semua Area</option>
+              @foreach ($kantorAreaOptions as $kantorArea)
+                <option value="{{ $kantorArea }}" @selected($selectedKantorArea === $kantorArea)>{{ $kantorArea }}</option>
+              @endforeach
+            </select>
+          @endif
+          @if ($kantorClusterOptions->isNotEmpty())
+            <select name="cluster" onchange="this.form.submit()">
+              <option value="">Semua Cabang-Cluster</option>
+              @foreach ($kantorClusterOptions as $kantorCluster)
+                <option value="{{ $kantorCluster }}" @selected($selectedKantorCluster === $kantorCluster)>{{ $kantorCluster }}</option>
+              @endforeach
+            </select>
+          @endif
           @if ($kantorOptions->isNotEmpty())
             <select name="kantor" onchange="this.form.submit()">
-              <option value="">Semua Kantor</option>
+              <option value="">Semua Cabang</option>
               @foreach ($kantorOptions as $kantor)
                 <option value="{{ $kantor->id }}" @selected((string) ($filters['kantor'] ?? '') === (string) $kantor->id)>{{ $kantor->nama }}</option>
               @endforeach
@@ -46,14 +62,14 @@
             <option value="aktif" @selected(($filters['status'] ?? '') === 'aktif')>Aktif</option>
             <option value="nonaktif" @selected(($filters['status'] ?? '') === 'nonaktif')>Nonaktif</option>
           </select>
-          <select name="area" onchange="this.form.submit()">
-            <option value="">Semua Area</option>
-            @foreach ($areaOptions as $area)
-              <option value="{{ $area }}" @selected(($filters['area'] ?? '') === $area)>{{ $area }}</option>
+          <select name="ring_area" onchange="this.form.submit()">
+            <option value="">Semua Ring Area</option>
+            @foreach ($ringAreaOptions as $ringArea)
+              <option value="{{ $ringArea }}" @selected(($filters['ring_area'] ?? '') === $ringArea)>{{ $ringArea }}</option>
             @endforeach
           </select>
           <select name="sektor" onchange="this.form.submit()">
-            <option value="">Semua Sektor</option>
+            <option value="">Semua Kategori</option>
             @foreach ($sektorOptions as $sektor)
               <option value="{{ $sektor }}" @selected(($filters['sektor'] ?? '') === $sektor)>{{ $sektor }}</option>
             @endforeach
@@ -84,9 +100,11 @@
           <thead>
             <tr>
               <th>Nama POI</th>
-              <th>Kantor</th>
-              <th>Sektor</th>
+              <th>Cabang</th>
               <th>Area</th>
+              <th>Cabang-Cluster</th>
+              <th>Kategori</th>
+              <th>Ring Area</th>
               <th>Status Mitra</th>
               <th>PIC</th>
               <th></th>
@@ -105,9 +123,11 @@
                     <small style="color:#8A6B55">-</small>
                   @endif
                 </td>
-                <td data-label="Kantor">{{ $poi->kantor->nama ?? '-' }}</td>
-                <td data-label="Sektor">{{ $poi->sektor }}</td>
-                <td data-label="Area">{{ $poi->area ?? '-' }}</td>
+                <td data-label="Cabang">{{ $poi->kantor->nama ?? '-' }}</td>
+                <td data-label="Area">{{ $poi->kantor->area ?? '-' }}</td>
+                <td data-label="Cabang-Cluster">{{ $poi->kantor->cabang_cluster ?? '-' }}</td>
+                <td data-label="Kategori">{{ $poi->sektor }}</td>
+                <td data-label="Ring Area">{{ $poi->area ?? '-' }}</td>
                 <td data-label="Status Mitra"><span class="badge {{ $poi->statusMitraBadgeClass() }}">{{ $poi->status_mitra }}</span></td>
                 <td data-label="PIC">{{ $poi->pic ?? '-' }}</td>
                 <td class="cell-actions">

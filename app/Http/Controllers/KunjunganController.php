@@ -19,6 +19,8 @@ use Illuminate\Validation\ValidationException;
 
 class KunjunganController extends Controller
 {
+    use \App\Http\Controllers\Concerns\NarrowsKantorByAreaCluster;
+
     private const PER_PAGE = 15;
 
     /**
@@ -377,24 +379,41 @@ class KunjunganController extends Controller
             'poi' => ['nullable', 'string', 'max:255'],
             'kantor_id' => ['nullable', 'integer'],
             'sales_id' => ['nullable', 'integer'],
+            'area' => ['nullable', 'string', 'max:255'],
+            'cluster' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $allowedKantorIds = $user->isAdminFinal()
-            ? $user->kantor()->pluck('kantor.id')
-            : null; // null = admin, unrestricted
+        $allowedKantor = $user->isAdminFinal()
+            ? $user->kantor()->orderBy('nama')->get()
+            : Kantor::where('kode', '!=', Kantor::SENTINEL_ALL_KODE)->orderBy('nama')->get();
 
-        // admin_final requesting a kantor_id outside their own assignment must not leak
-        // any rows — intersect rather than trust the filter value outright.
+        // Area/Cabang-Cluster (2026-07-23) narrow the SAME pool a specific
+        // kantor_id pick draws from — same pattern as PoiController::index().
+        $narrowed = $this->narrowKantorByAreaCluster($request, $allowedKantor);
+        $kantorOptions = $narrowed['kantorOptions'];
+        $narrowedIds = $kantorOptions->pluck('id')->all();
+
+        // admin's TRUE default (nothing picked at any level) stays
+        // unrestricted; admin_final is always bounded to their own set;
+        // either role gets constrained once Area/Cluster actually narrowed
+        // the pool below "everything allowed".
+        $mustConstrainToNarrowed = ! $user->isAdmin()
+            || $narrowed['selectedArea'] !== null
+            || $narrowed['selectedCluster'] !== null;
+
+        // A kantor_id outside the (now Area/Cluster-narrowed) allowed pool
+        // must not leak any rows — intersect rather than trust the filter
+        // value outright.
         $kantorFilterId = $filters['kantor_id'] ?? null;
-        if ($allowedKantorIds !== null && $kantorFilterId && ! $allowedKantorIds->contains((int) $kantorFilterId)) {
+        if ($kantorFilterId && ! in_array((int) $kantorFilterId, $narrowedIds, true)) {
             $kantorFilterId = -1; // guaranteed no match
         }
 
         $kunjungans = Kunjungan::query()
             ->with(['poi.kantor', 'sales', 'produkList'])
-            ->whereHas('poi', function ($q) use ($allowedKantorIds, $kantorFilterId, $filters) {
-                if ($allowedKantorIds !== null) {
-                    $q->whereIn('kantor_id', $allowedKantorIds);
+            ->whereHas('poi', function ($q) use ($mustConstrainToNarrowed, $narrowedIds, $kantorFilterId, $filters) {
+                if ($mustConstrainToNarrowed) {
+                    $q->whereIn('kantor_id', $narrowedIds);
                 }
                 if ($kantorFilterId) {
                     $q->where('kantor_id', $kantorFilterId);
@@ -412,13 +431,9 @@ class KunjunganController extends Controller
             ->paginate(self::PER_PAGE)
             ->withQueryString();
 
-        $kantorOptions = $allowedKantorIds !== null
-            ? Kantor::query()->whereIn('id', $allowedKantorIds)->orderBy('nama')->get(['id', 'nama'])
-            : Kantor::query()->orderBy('nama')->get(['id', 'nama']);
-
         $salesOptions = User::query()
             ->where('role', User::ROLE_SALES)
-            ->when($allowedKantorIds !== null, fn ($q) => $q->whereHas('kantor', fn ($kq) => $kq->whereIn('kantor.id', $allowedKantorIds)))
+            ->when($mustConstrainToNarrowed, fn ($q) => $q->whereHas('kantor', fn ($kq) => $kq->whereIn('kantor.id', $narrowedIds)))
             ->orderBy('nama_lengkap')
             ->get(['id', 'nama_lengkap']);
 
@@ -434,6 +449,10 @@ class KunjunganController extends Controller
             'kunjungans' => $kunjungans,
             'hasilOptions' => Kunjungan::HASIL_OPTIONS,
             'kantorOptions' => $kantorOptions,
+            'kantorAreaOptions' => $narrowed['areaOptions'],
+            'selectedKantorArea' => $narrowed['selectedArea'],
+            'kantorClusterOptions' => $narrowed['clusterOptions'],
+            'selectedKantorCluster' => $narrowed['selectedCluster'],
             'salesOptions' => $salesOptions,
             'filters' => $filters,
             'latestKunjunganIdByPoi' => $latestKunjunganIdByPoi,

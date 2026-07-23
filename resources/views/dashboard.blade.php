@@ -12,26 +12,67 @@
     <div class="form-status">{{ session('status') }}</div>
   @endif
 
-  @if ($kantorOptions->isNotEmpty())
-    <form method="GET" action="{{ route('dashboard') }}" class="panel" style="margin-bottom:16px;padding:14px 16px" id="formKantorMonitor">
-      <input type="hidden" name="periode" value="{{ $periode }}">
-      <div class="kantor-monitor-row" style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px">
-        <div style="flex:1;min-width:260px">
-          <div class="kantor-picker-chips" id="kantorChipList"></div>
-          <div class="poi-wrap" style="margin-top:8px;max-width:380px">
-            <i class="bi bi-search poi-icon-left"></i>
-            <input type="text" id="kantorPickerInput" class="autocomplete-input" placeholder="Cari &amp; tambah kantor untuk dipantau..." autocomplete="off">
-            <div id="kantorPickerDropdown" class="autocomplete-dropdown"></div>
+  @if ($kantorOptions->isNotEmpty() || $areaOptions->isNotEmpty())
+    <div class="panel" style="margin-bottom:16px;padding:14px 16px">
+      {{-- Area: plain single-select, applies immediately on change (its own
+           small form so submitting it doesn't carry over Cabang-Cluster/
+           Cabang selections scoped to a different Area). --}}
+      @if ($areaOptions->isNotEmpty())
+        <form method="GET" action="{{ route('dashboard') }}" style="margin-bottom:14px">
+          <input type="hidden" name="periode" value="{{ $periode }}">
+          <label style="display:block;font-size:11.5px;font-weight:600;color:var(--brand-700);margin-bottom:6px">Area</label>
+          <select name="area" onchange="this.form.submit()" style="max-width:280px">
+            <option value="">Semua Area</option>
+            @foreach ($areaOptions as $areaOpt)
+              <option value="{{ $areaOpt }}" @selected($selectedArea === $areaOpt)>{{ $areaOpt }}</option>
+            @endforeach
+          </select>
+        </form>
+      @endif
+
+      {{-- Cabang-Cluster and Cabang: multi-select chip pickers, both apply
+           together via Terapkan (not on every click) — Cabang-Cluster's
+           options are scoped to the Area above, Cabang's to whichever
+           Cabang-Cluster was applied on the last Terapkan (see
+           DashboardController::buildHierarchicalScope). --}}
+      <form method="GET" action="{{ route('dashboard') }}" id="formKantorMonitor">
+        <input type="hidden" name="periode" value="{{ $periode }}">
+        <input type="hidden" name="area" value="{{ $selectedArea }}">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          @if ($clusterOptions->isNotEmpty())
+            <div>
+              <label style="display:block;font-size:11.5px;font-weight:600;color:var(--brand-700);margin-bottom:6px">Cabang-Cluster</label>
+              <div class="kantor-picker-chips" id="clusterChipList"></div>
+              <div class="poi-wrap" style="margin-top:8px;max-width:380px">
+                <i class="bi bi-search poi-icon-left"></i>
+                <input type="text" id="clusterPickerInput" class="autocomplete-input" placeholder="Cari &amp; tambah Cabang-Cluster..." autocomplete="off">
+                <div id="clusterPickerDropdown" class="autocomplete-dropdown"></div>
+              </div>
+            </div>
+          @endif
+
+          <div class="kantor-monitor-row" style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:14px">
+            @if ($kantorOptions->isNotEmpty())
+              <div style="flex:1;min-width:260px">
+                <label style="display:block;font-size:11.5px;font-weight:600;color:var(--brand-700);margin-bottom:6px">Cabang</label>
+                <div class="kantor-picker-chips" id="kantorChipList"></div>
+                <div class="poi-wrap" style="margin-top:8px;max-width:380px">
+                  <i class="bi bi-search poi-icon-left"></i>
+                  <input type="text" id="kantorPickerInput" class="autocomplete-input" placeholder="Cari &amp; tambah Cabang untuk dipantau..." autocomplete="off">
+                  <div id="kantorPickerDropdown" class="autocomplete-dropdown"></div>
+                </div>
+              </div>
+            @endif
+            <div class="kantor-monitor-actions" style="display:flex;align-items:center;gap:10px;margin-left:auto;padding-top:2px">
+              <button type="submit" class="btn-primary-custom" style="width:auto;padding:8px 18px;font-size:12.5px">Terapkan</button>
+              @if ($selectedKantorIds !== [] || $selectedClusters !== [] || $selectedArea !== null)
+                <a href="{{ route('dashboard', array_filter(['periode' => $periode])) }}" style="font-size:12px;color:var(--brand-500);text-decoration:none">Reset</a>
+              @endif
+            </div>
           </div>
         </div>
-        <div class="kantor-monitor-actions" style="display:flex;align-items:center;gap:10px;margin-left:auto;padding-top:2px">
-          <button type="submit" class="btn-primary-custom" style="width:auto;padding:8px 18px;font-size:12.5px">Terapkan</button>
-          @if ($selectedKantorIds !== [])
-            <a href="{{ route('dashboard', array_filter(['periode' => $periode])) }}" style="font-size:12px;color:var(--brand-500);text-decoration:none">Reset</a>
-          @endif
-        </div>
-      </div>
-    </form>
+      </form>
+    </div>
   @endif
 
   <div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">
@@ -73,9 +114,9 @@
 
   <div class="grid-3">
     <div class="panel">
-      <div class="panel-head"><h3>Top Area (Ring 1&ndash;4)</h3></div>
+      <div class="panel-head"><h3>Top Ring Area (Ring 1&ndash;4)</h3></div>
       @foreach ($area['all'] as $key => $a)
-        @php($rcls = match($key) { 'Ring 1 (0 - 1 Km)' => 'r1', 'Ring 2 (>1 - 3 Km)' => 'r2', 'Ring 3 (>3 - 5 Km)' => 'r3', default => 'r4' })
+        @php($rcls = match($key) { 'Ring 1' => 'r1', 'Ring 2' => 'r2', 'Ring 3' => 'r3', default => 'r4' })
         <div class="area-label {{ $rcls }}">
           <span>{{ $a['label'] }}</span>
           <span class="muted">{{ number_format($a['total']) }} ({{ $a['persen'] }}%)</span>
@@ -87,9 +128,9 @@
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h3>Top Area &ndash; BNI</h3></div>
+      <div class="panel-head"><h3>Top Ring Area &ndash; BNI</h3></div>
       @foreach ($area['bni'] as $key => $a)
-        @php($rcls = match($key) { 'Ring 1 (0 - 1 Km)' => 'r1', 'Ring 2 (>1 - 3 Km)' => 'r2', 'Ring 3 (>3 - 5 Km)' => 'r3', default => 'r4' })
+        @php($rcls = match($key) { 'Ring 1' => 'r1', 'Ring 2' => 'r2', 'Ring 3' => 'r3', default => 'r4' })
         <div class="area-label {{ $rcls }}">
           <span>{{ $a['label'] }}</span>
           <span class="muted">{{ number_format($a['total']) }} ({{ $a['persen'] }}%)</span>
@@ -101,9 +142,9 @@
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h3>Top Area &ndash; Non BNI</h3></div>
+      <div class="panel-head"><h3>Top Ring Area &ndash; Non BNI</h3></div>
       @foreach ($area['non'] as $key => $a)
-        @php($rcls = match($key) { 'Ring 1 (0 - 1 Km)' => 'r1', 'Ring 2 (>1 - 3 Km)' => 'r2', 'Ring 3 (>3 - 5 Km)' => 'r3', default => 'r4' })
+        @php($rcls = match($key) { 'Ring 1' => 'r1', 'Ring 2' => 'r2', 'Ring 3' => 'r3', default => 'r4' })
         <div class="area-label {{ $rcls }}">
           <span>{{ $a['label'] }}</span>
           <span class="muted">{{ number_format($a['total']) }} ({{ $a['persen'] }}%)</span>
@@ -117,7 +158,7 @@
 
   <div class="grid-3">
     <div class="panel">
-      <div class="panel-head"><h3>Top Sektor &ndash; BNI</h3></div>
+      <div class="panel-head"><h3>Top Kategori &ndash; BNI</h3></div>
       @forelse ($sektor['bni'] as $s)
         <div class="sektor-head">
           <span>{{ $s['sektor'] }}</span>
@@ -135,7 +176,7 @@
     </div>
 
     <div class="panel">
-      <div class="panel-head"><h3>Top Sektor &ndash; Non BNI</h3></div>
+      <div class="panel-head"><h3>Top Kategori &ndash; Non BNI</h3></div>
       @forelse ($sektor['non'] as $s)
         <div class="sektor-head">
           <span>{{ $s['sektor'] }}</span>
@@ -197,37 +238,43 @@
 
 @push('scripts')
 <script>
-(function () {
-  var chipList = document.getElementById('kantorChipList');
-  var input = document.getElementById('kantorPickerInput');
-  if (!input) return;
+// Shared multi-select chip picker (search + add + removable chips), reused
+// for both the Cabang and Cabang-Cluster pickers (2026-07-23) — was a single
+// kantor-only IIFE before; generalized so a second instance didn't have to
+// duplicate the whole search/keyboard-nav/chip-render logic. `id` is always
+// compared as a string so it works for both numeric kantor ids and cluster
+// name strings.
+function initChipPicker(cfg) {
+  var chipList = document.getElementById(cfg.chipListId);
+  var input = document.getElementById(cfg.inputId);
+  if (!chipList || !input) return;
 
-  var kantorData = @json($kantorOptions->map(fn ($k) => ['id' => $k->id, 'label' => $k->nama]));
-  var selectedIds = @json($selectedKantorIds);
-  var dropdown = document.getElementById('kantorPickerDropdown');
+  var dropdown = document.getElementById(cfg.dropdownId);
+  var data = cfg.data;
+  var selectedIds = cfg.selectedIds.map(String);
 
-  var selected = kantorData.filter(function (k) { return selectedIds.indexOf(k.id) !== -1; });
+  var selected = data.filter(function (k) { return selectedIds.indexOf(String(k.id)) !== -1; });
   var currentVisible = [];
   var highlighted = -1;
 
   function escHtml(str) {
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   function availableOptions() {
-    var selectedIdSet = selected.map(function (s) { return s.id; });
-    return kantorData.filter(function (k) { return selectedIdSet.indexOf(k.id) === -1; });
+    var selectedIdSet = selected.map(function (s) { return String(s.id); });
+    return data.filter(function (k) { return selectedIdSet.indexOf(String(k.id)) === -1; });
   }
 
   function renderChips() {
     if (selected.length === 0) {
-      chipList.innerHTML = '<span style="font-size:12px;color:#8A6B55">Belum ada kantor dipilih &mdash; menampilkan semua.</span>';
+      chipList.innerHTML = '<span style="font-size:12px;color:#8A6B55">' + cfg.emptyText + '</span>';
       return;
     }
     chipList.innerHTML = selected.map(function (k) {
       return '<span class="kantor-picker-chip">' + escHtml(k.label)
-        + '<input type="hidden" name="kantor[]" value="' + k.id + '">'
-        + '<button type="button" class="kantor-picker-chip-remove" data-id="' + k.id + '" aria-label="Hapus ' + escHtml(k.label) + '">&times;</button></span>';
+        + '<input type="hidden" name="' + cfg.fieldName + '" value="' + escHtml(k.id) + '">'
+        + '<button type="button" class="kantor-picker-chip-remove" data-id="' + escHtml(k.id) + '" aria-label="Hapus ' + escHtml(k.label) + '">&times;</button></span>';
     }).join('');
   }
 
@@ -240,26 +287,26 @@
 
     if (currentVisible.length === 0) {
       dropdown.innerHTML = '<div class="poi-option no-result">'
-        + (pool.length === 0 ? 'Semua kantor sudah dipilih' : 'Kantor tidak ditemukan') + '</div>';
+        + (pool.length === 0 ? cfg.allSelectedText : cfg.noResultText) + '</div>';
     } else {
-      dropdown.innerHTML = currentVisible.map(function (k, i) {
-        return '<div class="poi-option" data-id="' + k.id + '" data-idx="' + i + '">' + escHtml(k.label) + '</div>';
+      dropdown.innerHTML = currentVisible.map(function (k) {
+        return '<div class="poi-option" data-id="' + escHtml(k.id) + '">' + escHtml(k.label) + '</div>';
       }).join('');
     }
     highlighted = -1;
   }
 
-  function addKantor(id) {
-    var item = kantorData.find(function (k) { return k.id === id; });
-    if (!item || selected.some(function (s) { return s.id === id; })) return;
+  function addItem(id) {
+    var item = data.find(function (k) { return String(k.id) === String(id); });
+    if (!item || selected.some(function (s) { return String(s.id) === String(id); })) return;
     selected.push(item);
     renderChips();
     input.value = '';
     renderDropdown('');
   }
 
-  function removeKantor(id) {
-    selected = selected.filter(function (s) { return s.id !== id; });
+  function removeItem(id) {
+    selected = selected.filter(function (s) { return String(s.id) !== String(id); });
     renderChips();
     renderDropdown(input.value);
   }
@@ -300,27 +347,47 @@
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (highlighted >= 0 && highlighted < currentVisible.length) {
-        addKantor(currentVisible[highlighted].id);
+        addItem(currentVisible[highlighted].id);
       } else if (currentVisible.length === 1) {
-        addKantor(currentVisible[0].id);
+        addItem(currentVisible[0].id);
       }
     } else if (e.key === 'Escape') {
       dropdown.classList.remove('open');
     } else if (e.key === 'Backspace' && input.value === '' && selected.length) {
-      removeKantor(selected[selected.length - 1].id);
+      removeItem(selected[selected.length - 1].id);
     }
   });
   dropdown.addEventListener('mousedown', function (e) {
     var opt = e.target.closest('.poi-option[data-id]');
-    if (opt) addKantor(parseInt(opt.dataset.id, 10));
+    if (opt) addItem(opt.dataset.id);
   });
   chipList.addEventListener('click', function (e) {
     var btn = e.target.closest('.kantor-picker-chip-remove');
-    if (btn) removeKantor(parseInt(btn.dataset.id, 10));
+    if (btn) removeItem(btn.dataset.id);
   });
 
   renderChips();
-})();
+}
+
+initChipPicker({
+  chipListId: 'kantorChipList', inputId: 'kantorPickerInput', dropdownId: 'kantorPickerDropdown',
+  data: @json($kantorOptions->map(fn ($k) => ['id' => $k->id, 'label' => $k->nama])),
+  selectedIds: @json($selectedKantorIds),
+  fieldName: 'kantor[]',
+  emptyText: 'Belum ada Cabang dipilih &mdash; menampilkan semua.',
+  noResultText: 'Cabang tidak ditemukan',
+  allSelectedText: 'Semua Cabang sudah dipilih',
+});
+
+initChipPicker({
+  chipListId: 'clusterChipList', inputId: 'clusterPickerInput', dropdownId: 'clusterPickerDropdown',
+  data: @json($clusterOptions->map(fn ($c) => ['id' => $c, 'label' => $c])),
+  selectedIds: @json($selectedClusters),
+  fieldName: 'cluster[]',
+  emptyText: 'Belum ada Cabang-Cluster dipilih &mdash; menampilkan semua di Area ini.',
+  noResultText: 'Cabang-Cluster tidak ditemukan',
+  allSelectedText: 'Semua Cabang-Cluster sudah dipilih',
+});
 
 new Chart(document.getElementById('chartKunjungan'), {
   type: 'bar',

@@ -20,9 +20,9 @@
 </div>
 
 <div class="field">
-  <label>Kantor</label>
+  <label>Cabang</label>
   <select name="kantor_id" required style="{{ $selectStyle }}">
-    <option value="" disabled @selected(! $old('kantor_id'))>Pilih kantor&hellip;</option>
+    <option value="" disabled @selected(! $old('kantor_id'))>Pilih Cabang&hellip;</option>
     @foreach ($kantorOptions as $kantor)
       <option value="{{ $kantor->id }}" @selected((string) $old('kantor_id') === (string) $kantor->id)>{{ $kantor->nama }}</option>
     @endforeach
@@ -30,7 +30,7 @@
 </div>
 
 <div class="field">
-  <label>Sektor <small style="font-weight:400;color:#8A6B55">(pilih dari saran atau ketik sendiri)</small></label>
+  <label>Kategori <small style="font-weight:400;color:#8A6B55">(pilih dari saran atau ketik sendiri)</small></label>
   <div class="input-wrap">
     <i class="bi bi-diagram-3 leading"></i>
     <input type="text" name="sektor" list="sektorSuggestions" value="{{ $old('sektor') }}" placeholder="Contoh: Retail & Shopping" required>
@@ -43,7 +43,7 @@
 </div>
 
 <div class="field">
-  <label>Sub Sektor <small style="font-weight:400;color:#8A6B55">(opsional)</small></label>
+  <label>Sub Kategori <small style="font-weight:400;color:#8A6B55">(opsional)</small></label>
   <div class="input-wrap">
     <i class="bi bi-tag leading"></i>
     <input type="text" name="sub_sektor" value="{{ $old('sub_sektor') }}" placeholder="Contoh: RESTAURANT, CAFE, PHARMACY">
@@ -51,10 +51,10 @@
 </div>
 
 <div class="field">
-  <label>Area <small style="font-weight:400;color:#8A6B55">(opsional &mdash; pilih dari saran atau ketik sendiri)</small></label>
+  <label>Ring Area <small style="font-weight:400;color:#8A6B55">(opsional &mdash; pilih dari saran atau ketik sendiri)</small></label>
   <div class="input-wrap">
     <i class="bi bi-geo leading"></i>
-    <input type="text" name="area" list="areaSuggestions" value="{{ $old('area') }}" placeholder="Contoh: Ring 1 (0 - 1 Km)">
+    <input type="text" name="area" list="areaSuggestions" value="{{ $old('area') }}" placeholder="Contoh: Ring 1">
   </div>
   <datalist id="areaSuggestions">
     @foreach ($areaOptions as $area)

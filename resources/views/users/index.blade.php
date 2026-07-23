@@ -39,7 +39,7 @@
           </select>
           @if ($kantorOptions->isNotEmpty())
             <select name="kantor" onchange="this.form.submit()">
-              <option value="">Semua Kantor</option>
+              <option value="">Semua Cabang</option>
               @foreach ($kantorOptions as $kantor)
                 <option value="{{ $kantor->id }}" @selected((string) ($filters['kantor'] ?? '') === (string) $kantor->id)>{{ $kantor->nama }}</option>
               @endforeach

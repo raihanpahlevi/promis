@@ -32,10 +32,12 @@
             @endif
           </span>
         </div>
-        <div class="detail-row"><span>Kantor</span><span>{{ $poi->kantor->nama ?? '-' }}</span></div>
-        <div class="detail-row"><span>Sektor</span><span>{{ $poi->sektor }}</span></div>
-        <div class="detail-row"><span>Sub Sektor</span><span>{{ $poi->sub_sektor ?? '-' }}</span></div>
-        <div class="detail-row"><span>Area</span><span>{{ $poi->area ?? '-' }}</span></div>
+        <div class="detail-row"><span>Cabang</span><span>{{ $poi->kantor->nama ?? '-' }}</span></div>
+        <div class="detail-row"><span>Area</span><span>{{ $poi->kantor->area ?? '-' }}</span></div>
+        <div class="detail-row"><span>Cabang-Cluster</span><span>{{ $poi->kantor->cabang_cluster ?? '-' }}</span></div>
+        <div class="detail-row"><span>Kategori</span><span>{{ $poi->sektor }}</span></div>
+        <div class="detail-row"><span>Sub Kategori</span><span>{{ $poi->sub_sektor ?? '-' }}</span></div>
+        <div class="detail-row"><span>Ring Area</span><span>{{ $poi->area ?? '-' }}</span></div>
         <div class="detail-row"><span>Status Mitra</span><span><span class="badge {{ $poi->statusMitraBadgeClass() }}">{{ $poi->status_mitra }}</span></span></div>
         <div class="detail-row"><span>PIC</span><span>{{ $poi->pic ?? '-' }}</span></div>
         <div class="detail-row"><span>Nomor Rekening/CIF</span><span>{{ $poi->norek_cif ?? '-' }}</span></div>

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['kode', 'nama', 'is_active'])]
+#[Fillable(['kode', 'nama', 'area', 'cabang_cluster', 'is_active'])]
 class Kantor extends Model
 {
     /**

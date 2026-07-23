@@ -197,6 +197,46 @@ class RekapSalesTest extends TestCase
         $this->assertEqualsCanonicalizing([$kantorA->id, $kantorB->id], $selectedIds);
     }
 
+    public function test_area_filter_narrows_scope_to_only_that_areas_kantor(): void
+    {
+        $jakarta = Kantor::create(['kode' => 'A', 'nama' => 'Cabang Jakarta', 'area' => 'Area Jakarta']);
+        $bandung = Kantor::create(['kode' => 'B', 'nama' => 'Cabang Bandung', 'area' => 'Area Jabar']);
+        $unit = Unit::create(['nama' => 'BTRM', 'is_active' => true]);
+
+        $this->salesUser($jakarta, $unit, ['nama_lengkap' => 'Orang Jakarta']);
+        $this->salesUser($bandung, $unit, ['nama_lengkap' => 'Orang Bandung']);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $response = $this->actingAs($admin)->get('/laporan/rekap-sales?mode=tidak&area='.urlencode('Area Jakarta'));
+
+        $response->assertOk();
+        $names = $response->viewData('tidakRows')->pluck('nama_lengkap');
+        $this->assertTrue($names->contains('Orang Jakarta'));
+        $this->assertFalse($names->contains('Orang Bandung'));
+        $this->assertSame('Area Jakarta', $response->viewData('selectedKantorArea'));
+    }
+
+    public function test_cluster_filter_narrows_within_the_selected_area(): void
+    {
+        $clusterA = Kantor::create(['kode' => 'A', 'nama' => 'Cabang A', 'area' => 'Area X', 'cabang_cluster' => 'Cluster A']);
+        $clusterB = Kantor::create(['kode' => 'B', 'nama' => 'Cabang B', 'area' => 'Area X', 'cabang_cluster' => 'Cluster B']);
+        $unit = Unit::create(['nama' => 'BTRM', 'is_active' => true]);
+
+        $this->salesUser($clusterA, $unit, ['nama_lengkap' => 'Orang Cluster A']);
+        $this->salesUser($clusterB, $unit, ['nama_lengkap' => 'Orang Cluster B']);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $response = $this->actingAs($admin)->get(
+            '/laporan/rekap-sales?mode=tidak&area='.urlencode('Area X').'&cluster[]='.urlencode('Cluster A')
+        );
+
+        $response->assertOk();
+        $names = $response->viewData('tidakRows')->pluck('nama_lengkap');
+        $this->assertTrue($names->contains('Orang Cluster A'));
+        $this->assertFalse($names->contains('Orang Cluster B'));
+        $this->assertSame(['Cluster A'], $response->viewData('selectedKantorClusters'));
+    }
+
     public function test_selecting_zero_kantor_defaults_to_full_scope_like_before(): void
     {
         $kantorA = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);

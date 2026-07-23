@@ -253,4 +253,99 @@ class DashboardTest extends TestCase
         // Total POI is current stock, never period-filtered — still counts the POI itself.
         $response->assertViewHas('totals', fn ($totals) => $totals['total_poi'] === 1);
     }
+
+    // ---------------- Area -> Cabang-Cluster -> Cabang drill-down (2026-07-23) ----------------
+
+    public function test_area_filter_narrows_scope_to_only_kantor_in_that_area(): void
+    {
+        $jakarta1 = Kantor::create(['kode' => 'A', 'nama' => 'Cabang Jakarta 1', 'area' => 'Area Jakarta']);
+        $jakarta2 = Kantor::create(['kode' => 'B', 'nama' => 'Cabang Jakarta 2', 'area' => 'Area Jakarta']);
+        $bandung = Kantor::create(['kode' => 'C', 'nama' => 'Cabang Bandung', 'area' => 'Area Jabar']);
+
+        $this->poi($jakarta1);
+        $this->poi($jakarta2);
+        $this->poi($bandung);
+        $this->poi($bandung);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $response = $this->actingAs($admin)->get('/dashboard?area='.urlencode('Area Jakarta'));
+
+        $response->assertOk();
+        $response->assertViewHas('totals', fn ($totals) => $totals['total_poi'] === 2);
+        $response->assertViewHas('selectedArea', fn ($area) => $area === 'Area Jakarta');
+        $response->assertViewHas('kantorOptions', function ($options) use ($jakarta1, $jakarta2) {
+            return $options->pluck('id')->sort()->values()->all() === collect([$jakarta1->id, $jakarta2->id])->sort()->values()->all();
+        });
+    }
+
+    public function test_cluster_filter_narrows_within_the_selected_area(): void
+    {
+        $clusterA1 = Kantor::create(['kode' => 'A1', 'nama' => 'Cabang A1', 'area' => 'Area X', 'cabang_cluster' => 'Cluster A']);
+        $clusterA2 = Kantor::create(['kode' => 'A2', 'nama' => 'Cabang A2', 'area' => 'Area X', 'cabang_cluster' => 'Cluster A']);
+        $clusterB = Kantor::create(['kode' => 'B1', 'nama' => 'Cabang B1', 'area' => 'Area X', 'cabang_cluster' => 'Cluster B']);
+
+        $this->poi($clusterA1);
+        $this->poi($clusterA2);
+        $this->poi($clusterB);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $response = $this->actingAs($admin)->get('/dashboard?area='.urlencode('Area X').'&cluster[]='.urlencode('Cluster A'));
+
+        $response->assertOk();
+        $response->assertViewHas('totals', fn ($totals) => $totals['total_poi'] === 2);
+        $response->assertViewHas('selectedClusters', fn ($clusters) => $clusters === ['Cluster A']);
+    }
+
+    public function test_kantor_filter_still_narrows_to_one_specific_cabang_within_the_hierarchy(): void
+    {
+        $cabang1 = Kantor::create(['kode' => 'A1', 'nama' => 'Cabang A1', 'area' => 'Area X', 'cabang_cluster' => 'Cluster A']);
+        $cabang2 = Kantor::create(['kode' => 'A2', 'nama' => 'Cabang A2', 'area' => 'Area X', 'cabang_cluster' => 'Cluster A']);
+
+        $this->poi($cabang1);
+        $this->poi($cabang2);
+        $this->poi($cabang2);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $response = $this->actingAs($admin)->get(
+            '/dashboard?area='.urlencode('Area X').'&cluster[]='.urlencode('Cluster A').'&kantor[]='.$cabang2->id
+        );
+
+        $response->assertOk();
+        $response->assertViewHas('totals', fn ($totals) => $totals['total_poi'] === 2);
+        $response->assertViewHas('selectedKantorIds', fn ($ids) => $ids === [$cabang2->id]);
+    }
+
+    public function test_a_forged_area_value_is_ignored_and_falls_back_to_full_scope(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Cabang A', 'area' => 'Area Asli']);
+        $this->poi($kantor);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $response = $this->actingAs($admin)->get('/dashboard?area='.urlencode('Area Ngasal'));
+
+        $response->assertOk();
+        $response->assertViewHas('selectedArea', fn ($area) => $area === null);
+        $response->assertViewHas('totals', fn ($totals) => $totals['total_poi'] === 1);
+    }
+
+    /**
+     * admin_final's area/cluster options must only ever reflect kantor they
+     * actually own (user_kantor) — same non-leaking rule as the plain
+     * kantor[] filter already has (test_admin_final_forged_kantor_filter_...).
+     */
+    public function test_admin_final_area_options_are_scoped_to_their_own_kantor_only(): void
+    {
+        $mine = Kantor::create(['kode' => 'MINE', 'nama' => 'Kantor Saya', 'area' => 'Area Saya']);
+        $other = Kantor::create(['kode' => 'OTHER', 'nama' => 'Kantor Lain', 'area' => 'Area Lain']);
+
+        $adminFinal = User::factory()->adminFinal()->create(['force_password_change' => false]);
+        $adminFinal->kantor()->attach($mine->id);
+
+        $response = $this->actingAs($adminFinal)->get('/dashboard');
+
+        $response->assertOk();
+        $response->assertViewHas('areaOptions', function ($options) {
+            return $options->contains('Area Saya') && ! $options->contains('Area Lain');
+        });
+    }
 }

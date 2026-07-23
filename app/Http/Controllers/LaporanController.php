@@ -92,6 +92,10 @@ class LaporanController extends Controller
             'unitId' => $unitId,
             'kantorOptions' => $kantorScope['kantorOptions'],
             'selectedKantorIds' => $kantorScope['selectedKantorIds'],
+            'kantorAreaOptions' => $kantorScope['areaOptions'],
+            'selectedKantorArea' => $kantorScope['selectedArea'],
+            'kantorClusterOptions' => $kantorScope['clusterOptions'],
+            'selectedKantorClusters' => $kantorScope['selectedClusters'],
             'kunjunganRows' => $kunjunganRows,
             'kunjunganSummary' => $kunjunganSummary,
             'tidakRows' => $tidakRows,
@@ -106,43 +110,61 @@ class LaporanController extends Controller
      * own assignment, forged kantor ids outside that scope are dropped
      * rather than trusted.
      *
-     * Multi-select (2026-07-22): `kantor` can arrive as an array
-     * (`kantor[]=1&kantor[]=2`, from the checkbox list) or, for
-     * backwards-compatible old links/bookmarks, a single scalar (`kantor=1`)
-     * — collect() normalizes either shape into a list before filtering
-     * against the user's allowed ids. Selecting zero valid ids (nothing
-     * checked, or every checked id got filtered out as forged/foreign) falls
-     * back to the user's full scope, same as before.
+     * Layered with an Area -> Cabang-Cluster -> Cabang drill-down
+     * (2026-07-23, same shape as DashboardController::buildHierarchicalScope
+     * — duplicated here rather than shared, since Dashboard's version also
+     * computes its own kantorLabel string this page doesn't need, and this
+     * was the pragmatic call given the size of everything else that shipped
+     * alongside it): Area is a single value, Cabang-Cluster/Cabang are both
+     * multi-select (`cluster[]=`/`kantor[]=`, or a single legacy scalar —
+     * collect() normalizes either shape). Selecting nothing at any level
+     * falls back to the user's full scope, same as before.
      */
     private function resolveKantorScope(User $user, Request $request): array
     {
+        $allowedKantor = $user->isAdmin()
+            ? Kantor::where('kode', '!=', Kantor::SENTINEL_ALL_KODE)->orderBy('nama')->get()
+            : $user->kantor()->orderBy('nama')->get();
+
+        $areaOptions = $allowedKantor->pluck('area')->filter()->unique()->sort()->values();
+        $selectedArea = $request->filled('area') && $areaOptions->contains($request->input('area'))
+            ? $request->input('area')
+            : null;
+
+        $kantorInArea = $selectedArea !== null
+            ? $allowedKantor->where('area', $selectedArea)->values()
+            : $allowedKantor;
+
+        $clusterOptions = $kantorInArea->pluck('cabang_cluster')->filter()->unique()->sort()->values();
+        $requestedClusters = collect($request->input('cluster', []))
+            ->filter(fn ($v) => $v !== null && $v !== '')
+            ->map(fn ($v) => (string) $v)
+            ->unique()
+            ->values()
+            ->all();
+        $selectedClusters = array_values(array_intersect($requestedClusters, $clusterOptions->all()));
+
+        $kantorInCluster = $selectedClusters !== []
+            ? $kantorInArea->whereIn('cabang_cluster', $selectedClusters)->values()
+            : $kantorInArea;
+
         $requestedIds = collect($request->input('kantor', []))
             ->filter(fn ($v) => $v !== null && $v !== '')
             ->map(fn ($v) => (int) $v)
             ->unique()
             ->values()
             ->all();
-
-        if ($user->isAdmin()) {
-            $allKantor = Kantor::where('kode', '!=', Kantor::SENTINEL_ALL_KODE)->orderBy('nama')->get();
-            $allowedIds = $allKantor->pluck('id')->all();
-            $selected = array_values(array_intersect($requestedIds, $allowedIds));
-
-            return [
-                'kantorIds' => $selected !== [] ? $selected : $allowedIds,
-                'kantorOptions' => $allKantor,
-                'selectedKantorIds' => $selected,
-            ];
-        }
-
-        $owned = $user->kantor()->orderBy('nama')->get();
-        $ownedIds = $owned->pluck('id')->all();
-        $selected = array_values(array_intersect($requestedIds, $ownedIds));
+        $allowedIdsAfterCluster = $kantorInCluster->pluck('id')->all();
+        $selectedKantorIds = array_values(array_intersect($requestedIds, $allowedIdsAfterCluster));
 
         return [
-            'kantorIds' => $selected !== [] ? $selected : $ownedIds,
-            'kantorOptions' => $owned,
-            'selectedKantorIds' => $selected,
+            'kantorIds' => $selectedKantorIds !== [] ? $selectedKantorIds : $allowedIdsAfterCluster,
+            'kantorOptions' => $kantorInCluster,
+            'selectedKantorIds' => $selectedKantorIds,
+            'areaOptions' => $areaOptions,
+            'selectedArea' => $selectedArea,
+            'clusterOptions' => $clusterOptions,
+            'selectedClusters' => $selectedClusters,
         ];
     }
 

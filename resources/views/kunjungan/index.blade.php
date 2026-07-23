@@ -8,10 +8,32 @@
 
   <div class="panel" style="margin-bottom:22px">
     <form method="GET" action="{{ route('kunjungan.index') }}" style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+      @if ($kantorAreaOptions->isNotEmpty())
+        <div>
+          <label style="display:block;font-size:11.5px;font-weight:600;color:var(--brand-700);margin-bottom:4px">Area</label>
+          <select name="area" style="font-size:12px;padding:8px 10px;border-radius:8px;border:1px solid var(--brand-100);color:var(--brand-700);background:var(--brand-50)">
+            <option value="">Semua Area</option>
+            @foreach ($kantorAreaOptions as $kantorArea)
+              <option value="{{ $kantorArea }}" {{ $selectedKantorArea === $kantorArea ? 'selected' : '' }}>{{ $kantorArea }}</option>
+            @endforeach
+          </select>
+        </div>
+      @endif
+      @if ($kantorClusterOptions->isNotEmpty())
+        <div>
+          <label style="display:block;font-size:11.5px;font-weight:600;color:var(--brand-700);margin-bottom:4px">Cabang-Cluster</label>
+          <select name="cluster" style="font-size:12px;padding:8px 10px;border-radius:8px;border:1px solid var(--brand-100);color:var(--brand-700);background:var(--brand-50)">
+            <option value="">Semua Cluster</option>
+            @foreach ($kantorClusterOptions as $kantorCluster)
+              <option value="{{ $kantorCluster }}" {{ $selectedKantorCluster === $kantorCluster ? 'selected' : '' }}>{{ $kantorCluster }}</option>
+            @endforeach
+          </select>
+        </div>
+      @endif
       <div>
-        <label style="display:block;font-size:11.5px;font-weight:600;color:var(--brand-700);margin-bottom:4px">Kantor</label>
+        <label style="display:block;font-size:11.5px;font-weight:600;color:var(--brand-700);margin-bottom:4px">Cabang</label>
         <select name="kantor_id" style="font-size:12px;padding:8px 10px;border-radius:8px;border:1px solid var(--brand-100);color:var(--brand-700);background:var(--brand-50)">
-          <option value="">Semua kantor{{ auth()->user()->isAdminFinal() ? ' saya' : '' }}</option>
+          <option value="">Semua Cabang{{ auth()->user()->isAdminFinal() ? ' saya' : '' }}</option>
           @foreach ($kantorOptions as $kantor)
             <option value="{{ $kantor->id }}" {{ (string) ($filters['kantor_id'] ?? '') === (string) $kantor->id ? 'selected' : '' }}>{{ $kantor->nama }}</option>
           @endforeach

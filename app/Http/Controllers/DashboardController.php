@@ -44,7 +44,7 @@ use Illuminate\View\View;
  */
 class DashboardController extends Controller
 {
-    private const RING_LEVELS = ['Ring 1 (0 - 1 Km)', 'Ring 2 (>1 - 3 Km)', 'Ring 3 (>3 - 5 Km)', 'Ring 4 (> 5 Km)'];
+    private const RING_LEVELS = Poi::AREA_OPTIONS;
 
     private const BNI_STATUSES = ['Nasabah Non Merchant BNI', 'Nasabah Merchant BNI'];
 
@@ -56,7 +56,8 @@ class DashboardController extends Controller
         $scope = $this->resolveKantorScope($user, $request);
         $kantorIds = $scope['kantorIds'];
 
-        $totals = $this->resolveTotals($user, $kantorIds, $scope['selectedKantorIds']);
+        $isFullyUnscoped = $scope['selectedKantorIds'] === [] && $scope['selectedClusters'] === [] && $scope['selectedArea'] === null;
+        $totals = $this->resolveTotals($user, $kantorIds, $isFullyUnscoped);
         $area = $this->areaBreakdown($kantorIds);
         $sektor = $this->sektorBreakdown($kantorIds);
 
@@ -74,6 +75,10 @@ class DashboardController extends Controller
             'kantorLabel' => $scope['label'],
             'kantorOptions' => $scope['kantorOptions'],
             'selectedKantorIds' => $scope['selectedKantorIds'],
+            'areaOptions' => $scope['areaOptions'],
+            'selectedArea' => $scope['selectedArea'],
+            'clusterOptions' => $scope['clusterOptions'],
+            'selectedClusters' => $scope['selectedClusters'],
             'totals' => $totals,
             'closing' => $closing,
             'area' => $area,
@@ -87,39 +92,28 @@ class DashboardController extends Controller
     }
 
     /**
-     * Server-side kantor scope — same shape as PoiController::scopeIndexQuery.
-     * admin: unrestricted, optional ?kantor[]= narrows to one or several for
-     * combined monitoring. admin_final: always bounded to their own kantor
-     * (user_kantor), optional ?kantor[]= narrows to a subset of their own —
-     * any forged id outside that set is silently dropped from the selection,
-     * never trusted. sales: hard-locked to the single session active kantor,
-     * ?kantor is not even read.
+     * Server-side kantor scope — same shape as PoiController::scopeIndexQuery,
+     * now layered with an Area -> Cabang-Cluster -> Cabang drill-down
+     * (2026-07-23, dashboard-only — no other screen has this hierarchy).
+     * admin: unrestricted, optional ?area=/?cluster[]=/?kantor[]= narrows the
+     * scope one level at a time. admin_final: always bounded to their own
+     * kantor (user_kantor) FIRST, then the same drill-down narrows within
+     * that owned set — any forged value outside what they own is silently
+     * dropped, never trusted. sales: hard-locked to the single session active
+     * kantor, none of area/cluster/kantor is even read (no picker renders).
      */
     private function resolveKantorScope(User $user, Request $request): array
     {
         if ($user->isAdmin()) {
             $allKantor = Kantor::where('kode', '!=', Kantor::SENTINEL_ALL_KODE)->orderBy('nama')->get();
-            $selectedIds = $this->parseSelectedKantorIds($request, $allKantor->pluck('id')->all());
 
-            return [
-                'kantorIds' => $selectedIds !== [] ? $selectedIds : $allKantor->pluck('id')->all(),
-                'kantorOptions' => $allKantor,
-                'selectedKantorIds' => $selectedIds,
-                'label' => $this->buildKantorLabel($selectedIds, $allKantor, 'Semua Kantor'),
-            ];
+            return $this->buildHierarchicalScope($request, $allKantor, 'Semua Kantor');
         }
 
         if ($user->isAdminFinal()) {
             $owned = $user->kantor()->orderBy('nama')->get();
-            $ownedIds = $owned->pluck('id')->all();
-            $selectedIds = $this->parseSelectedKantorIds($request, $ownedIds);
 
-            return [
-                'kantorIds' => $selectedIds !== [] ? $selectedIds : $ownedIds,
-                'kantorOptions' => $owned,
-                'selectedKantorIds' => $selectedIds,
-                'label' => $this->buildKantorLabel($selectedIds, $owned, 'Semua Kantor Saya'),
-            ];
+            return $this->buildHierarchicalScope($request, $owned, 'Semua Kantor Saya');
         }
 
         $activeId = (int) session('active_kantor_id');
@@ -129,6 +123,55 @@ class DashboardController extends Controller
             'kantorOptions' => new Collection(),
             'selectedKantorIds' => [$activeId],
             'label' => optional($user->kantor->firstWhere('id', $activeId))->nama ?? 'Kantor Saya',
+            'areaOptions' => new Collection(),
+            'selectedArea' => null,
+            'clusterOptions' => new Collection(),
+            'selectedClusters' => [],
+        ];
+    }
+
+    /**
+     * Narrows $allowedKantor (already role-scoped by the caller) through 3
+     * optional levels, each computed from the REQUEST STATE of the level(s)
+     * above it, not live client-side cascading — Area changing reloads the
+     * page (plain <select onchange="submit">), so Cluster options always
+     * reflect whichever Area is currently in the URL; Cluster/Cabang are
+     * multi-select "pick several, then Terapkan" (same chip-picker component
+     * as the existing kantor monitor), so narrowing by a cluster pick only
+     * takes effect (and narrows the Cabang picker's own options) on the NEXT
+     * page load, once Terapkan is pressed — an intentional two-step drill,
+     * not a bug. Nothing selected at any level falls back to the full
+     * $allowedKantor scope, same default as before this feature existed.
+     */
+    private function buildHierarchicalScope(Request $request, Collection $allowedKantor, string $allLabel): array
+    {
+        $areaOptions = $allowedKantor->pluck('area')->filter()->unique()->sort()->values();
+        $selectedArea = $request->filled('area') && $areaOptions->contains($request->input('area'))
+            ? $request->input('area')
+            : null;
+
+        $kantorInArea = $selectedArea !== null
+            ? $allowedKantor->where('area', $selectedArea)->values()
+            : $allowedKantor;
+
+        $clusterOptions = $kantorInArea->pluck('cabang_cluster')->filter()->unique()->sort()->values();
+        $selectedClusters = $this->parseMultiSelect($request, 'cluster', $clusterOptions->all());
+
+        $kantorInCluster = $selectedClusters !== []
+            ? $kantorInArea->whereIn('cabang_cluster', $selectedClusters)->values()
+            : $kantorInArea;
+
+        $selectedKantorIds = $this->parseSelectedKantorIds($request, $kantorInCluster->pluck('id')->all());
+
+        return [
+            'kantorIds' => $selectedKantorIds !== [] ? $selectedKantorIds : $kantorInCluster->pluck('id')->all(),
+            'kantorOptions' => $kantorInCluster,
+            'selectedKantorIds' => $selectedKantorIds,
+            'label' => $this->buildKantorLabel($selectedKantorIds, $selectedClusters, $selectedArea, $allowedKantor, $allLabel),
+            'areaOptions' => $areaOptions,
+            'selectedArea' => $selectedArea,
+            'clusterOptions' => $clusterOptions,
+            'selectedClusters' => $selectedClusters,
         ];
     }
 
@@ -151,15 +194,36 @@ class DashboardController extends Controller
         return array_values(array_intersect($ids, $allowedIds));
     }
 
-    private function buildKantorLabel(array $selectedIds, Collection $options, string $allLabel): string
+    /** Same shape as parseSelectedKantorIds() but for string values (Area/Cabang-Cluster names, not ids). */
+    private function parseMultiSelect(Request $request, string $key, array $allowedValues): array
     {
-        if ($selectedIds === []) {
-            return $allLabel;
+        $values = collect(Arr::wrap($request->input($key, [])))
+            ->filter(fn ($v) => $v !== null && $v !== '')
+            ->map(fn ($v) => (string) $v)
+            ->unique()
+            ->values()
+            ->all();
+
+        return array_values(array_intersect($values, $allowedValues));
+    }
+
+    private function buildKantorLabel(array $selectedKantorIds, array $selectedClusters, ?string $selectedArea, Collection $options, string $allLabel): string
+    {
+        if ($selectedKantorIds !== []) {
+            $names = $options->whereIn('id', $selectedKantorIds)->pluck('nama');
+
+            return $names->count() > 1 ? $names->count().' Cabang Dipilih' : (string) $names->first();
         }
 
-        $names = $options->whereIn('id', $selectedIds)->pluck('nama');
+        if ($selectedClusters !== []) {
+            return count($selectedClusters) > 1 ? count($selectedClusters).' Cabang-Cluster Dipilih' : $selectedClusters[0];
+        }
 
-        return $names->count() > 1 ? $names->count().' Kantor Dipilih' : (string) $names->first();
+        if ($selectedArea !== null) {
+            return $selectedArea;
+        }
+
+        return $allLabel;
     }
 
     /**
@@ -172,10 +236,16 @@ class DashboardController extends Controller
      * kantor* — deliberately not the global sentinel, which would pull in
      * every other kantor in the system too.
      */
-    private function resolveTotals(User $user, array $kantorIds, array $selectedKantorIds): array
+    private function resolveTotals(User $user, array $kantorIds, bool $isFullyUnscoped): array
     {
-        if ($selectedKantorIds !== []) {
-            $row = $this->sumSummaryRows($selectedKantorIds);
+        if (! $isFullyUnscoped) {
+            // Covers a specific Cabang selection AND an Area/Cabang-Cluster
+            // narrowing with no specific Cabang picked yet (2026-07-23) — in
+            // both cases $kantorIds is already the narrowed set
+            // (buildHierarchicalScope), so summing it directly is correct
+            // either way. Only truly nothing-selected-at-any-level reaches
+            // the sentinel/full-aggregate branch below.
+            $row = $this->sumSummaryRows($kantorIds);
         } elseif ($user->isAdmin()) {
             $allId = Kantor::where('kode', Kantor::SENTINEL_ALL_KODE)->value('id');
             $row = $allId ? $this->latestSummaryRow($allId) : null;

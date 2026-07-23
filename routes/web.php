@@ -33,6 +33,7 @@ Route::middleware('auth')->group(function () {
             require __DIR__.'/export.php';
             require __DIR__.'/histogram.php';
             require __DIR__.'/unit.php';
+            require __DIR__.'/kantor.php';
             require __DIR__.'/laporan.php';
         });
     });

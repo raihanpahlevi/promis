@@ -187,7 +187,41 @@ class ExportTest extends TestCase
         PoiFactory::new()->create(['kantor_id' => $kantor->id, 'area' => Poi::AREA_OPTIONS[1]]);
 
         $admin = User::factory()->admin()->create(['force_password_change' => false]);
-        $this->actingAs($admin)->get('/export/poi/download?area='.urlencode(Poi::AREA_OPTIONS[0]))->assertOk();
+        // `ring_area`, not `area` (2026-07-23) — `area` now means the
+        // Cabang-region filter, a different concept from the POI's own Ring
+        // Area (Poi::AREA_OPTIONS). See ExportController::downloadPoi().
+        $this->actingAs($admin)->get('/export/poi/download?ring_area='.urlencode(Poi::AREA_OPTIONS[0]))->assertOk();
+
+        Excel::assertDownloaded('/data-poi-.*\.xlsx/', function (PoiExport $export) use ($poiMatch) {
+            $rows = $export->query()->get();
+
+            return $rows->count() === 1 && $rows->first()->id === $poiMatch->id;
+        });
+    }
+
+    /**
+     * The Cabang-region `area`/`cluster` filters (2026-07-23) must narrow the
+     * export the same way they narrow PoiController::index()'s own table —
+     * otherwise "Export Excel" from a filtered list silently exports more
+     * than what's on screen.
+     */
+    public function test_poi_export_cabang_area_and_cluster_filters_narrow_the_query(): void
+    {
+        Excel::fake();
+        Excel::matchByRegex();
+
+        $kantorA = Kantor::create(['kode' => 'A', 'nama' => 'Cabang A', 'area' => 'Area X', 'cabang_cluster' => 'Cluster A']);
+        $kantorB = Kantor::create(['kode' => 'B', 'nama' => 'Cabang B', 'area' => 'Area X', 'cabang_cluster' => 'Cluster B']);
+        $kantorC = Kantor::create(['kode' => 'C', 'nama' => 'Cabang C', 'area' => 'Area Y']);
+
+        $poiMatch = PoiFactory::new()->create(['kantor_id' => $kantorA->id]);
+        PoiFactory::new()->create(['kantor_id' => $kantorB->id]);
+        PoiFactory::new()->create(['kantor_id' => $kantorC->id]);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $this->actingAs($admin)->get(
+            '/export/poi/download?area='.urlencode('Area X').'&cluster='.urlencode('Cluster A')
+        )->assertOk();
 
         Excel::assertDownloaded('/data-poi-.*\.xlsx/', function (PoiExport $export) use ($poiMatch) {
             $rows = $export->query()->get();

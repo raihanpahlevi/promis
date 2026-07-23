@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\NarrowsKantorByAreaCluster;
 use App\Models\Kantor;
 use App\Models\Kunjungan;
 use App\Models\KunjunganProduk;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -27,6 +29,8 @@ use Illuminate\View\View;
  */
 class HistogramController extends Controller
 {
+    use NarrowsKantorByAreaCluster;
+
     private const PER_PAGE = 15;
 
     public function index(Request $request): View
@@ -45,6 +49,10 @@ class HistogramController extends Controller
             'kantorOptions' => $scope['kantorOptions'],
             'selectedKantorId' => $scope['selectedKantorId'],
             'kantorLocked' => $scope['locked'],
+            'kantorAreaOptions' => $scope['areaOptions'],
+            'selectedKantorArea' => $scope['selectedArea'],
+            'kantorClusterOptions' => $scope['clusterOptions'],
+            'selectedKantorCluster' => $scope['selectedCluster'],
             'dari' => $dari,
             'sampai' => $sampai,
             'histogram' => $histogram,
@@ -58,25 +66,18 @@ class HistogramController extends Controller
     /**
      * admin: free choice, defaults to every kantor (query param optional). admin_final:
      * if they own exactly one kantor, the filter is locked to it (matches v1 — the
-     * select is rendered `disabled` since there's no real choice to make); if they own
-     * several, defaults to all of them with an optional narrowing filter, same pattern
-     * as the main Dashboard. A forged kantor id outside their ownership is ignored.
+     * select is rendered `disabled` since there's no real choice to make, and Area/
+     * Cluster don't render either — nothing to narrow); if they own several, defaults
+     * to all of them with an optional narrowing filter, same pattern as the main
+     * Dashboard. A forged kantor id outside their (now Area/Cluster-narrowed)
+     * ownership is ignored.
      */
     private function resolveKantorScope(User $user, Request $request): array
     {
         if ($user->isAdmin()) {
             $allKantor = Kantor::where('kode', '!=', Kantor::SENTINEL_ALL_KODE)->orderBy('nama')->get();
-            $selected = $request->filled('kantor') ? (int) $request->input('kantor') : null;
-            if ($selected !== null && ! $allKantor->contains('id', $selected)) {
-                $selected = null;
-            }
 
-            return [
-                'kantorIds' => $selected !== null ? [$selected] : $allKantor->pluck('id')->all(),
-                'kantorOptions' => $allKantor,
-                'selectedKantorId' => $selected,
-                'locked' => false,
-            ];
+            return $this->buildHistogramScope($request, $allKantor, false);
         }
 
         $owned = $user->kantor()->orderBy('nama')->get();
@@ -87,20 +88,34 @@ class HistogramController extends Controller
                 'kantorOptions' => $owned,
                 'selectedKantorId' => $owned->first()->id,
                 'locked' => true,
+                'areaOptions' => new Collection(),
+                'selectedArea' => null,
+                'clusterOptions' => new Collection(),
+                'selectedCluster' => null,
             ];
         }
 
-        $ownedIds = $owned->pluck('id')->all();
-        $selected = $request->filled('kantor') ? (int) $request->input('kantor') : null;
-        if ($selected !== null && ! in_array($selected, $ownedIds, true)) {
-            $selected = null;
-        }
+        return $this->buildHistogramScope($request, $owned, false);
+    }
+
+    private function buildHistogramScope(Request $request, Collection $allowedKantor, bool $locked): array
+    {
+        $narrowed = $this->narrowKantorByAreaCluster($request, $allowedKantor);
+        $narrowedIds = $narrowed['kantorOptions']->pluck('id')->all();
+
+        $selected = $request->filled('kantor') && in_array((int) $request->input('kantor'), $narrowedIds, true)
+            ? (int) $request->input('kantor')
+            : null;
 
         return [
-            'kantorIds' => $selected !== null ? [$selected] : $ownedIds,
-            'kantorOptions' => $owned,
+            'kantorIds' => $selected !== null ? [$selected] : $narrowedIds,
+            'kantorOptions' => $narrowed['kantorOptions'],
             'selectedKantorId' => $selected,
-            'locked' => false,
+            'locked' => $locked,
+            'areaOptions' => $narrowed['areaOptions'],
+            'selectedArea' => $narrowed['selectedArea'],
+            'clusterOptions' => $narrowed['clusterOptions'],
+            'selectedCluster' => $narrowed['selectedCluster'],
         ];
     }
 

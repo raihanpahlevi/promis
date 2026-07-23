@@ -35,10 +35,11 @@ class PoiImportTest extends TestCase
 
     /**
      * Builds a throwaway .xlsx fixture matching the real template's shape:
-     * a "Data POI" sheet with the exact Nama/Alamat/Sektor/Sub Sektor/Area/
-     * Outlet/Bank/PIC header row, plus decoy "Petunjuk" and "_lookup" sheets
-     * (mirrors the real Template_Import_POI_PROMIS.xlsx layout) so the
-     * WithMultipleSheets restriction to "Data POI" is actually exercised.
+     * a "Data POI" sheet with the exact Nama/Alamat/Kategori/Sub Kategori/
+     * Ring Area/Cabang/Bank/PIC header row (2026-07-23 final header set —
+     * see PoiImport's class docblock), plus decoy "Petunjuk" and "_lookup"
+     * sheets (mirrors the real Template_Import_POI_PROMIS.xlsx layout) so
+     * the WithMultipleSheets restriction to "Data POI" is actually exercised.
      *
      * @param  array<int, array<int, mixed>>  $rows
      */
@@ -53,7 +54,7 @@ class PoiImportTest extends TestCase
         $dataPoi = $spreadsheet->createSheet();
         $dataPoi->setTitle('Data POI');
         $dataPoi->fromArray(
-            ['Nama', 'Alamat', 'Sektor', 'Sub Sektor', 'Area', 'Outlet', 'Bank', 'PIC'],
+            ['Nama', 'Alamat', 'Kategori', 'Sub Kategori', 'Ring Area', 'Cabang', 'Bank', 'PIC'],
             null,
             'A1'
         );
@@ -83,7 +84,7 @@ class PoiImportTest extends TestCase
         $dataPoi = $spreadsheet->getActiveSheet();
         $dataPoi->setTitle('Data POI');
         $dataPoi->fromArray(
-            ['ID', 'Nama', 'Alamat', 'Sektor', 'Sub Sektor', 'Area', 'Outlet', 'Bank', 'PIC'],
+            ['ID', 'Nama', 'Alamat', 'Kategori', 'Sub Kategori', 'Ring Area', 'Cabang', 'Bank', 'PIC'],
             null,
             'A1'
         );
@@ -109,8 +110,8 @@ class PoiImportTest extends TestCase
         $import = new PoiImport($admin);
 
         $import->model([
-            'nama' => 'Toko A', 'alamat' => 'Jl. A', 'sektor' => 'Retail',
-            'sub_sektor' => '', 'area' => '', 'outlet' => 'Kantor A', 'bank' => '', 'pic' => '',
+            'nama' => 'Toko A', 'alamat' => 'Jl. A', 'kategori' => 'Retail',
+            'sub_kategori' => '', 'ring_area' => '', 'cabang' => 'Kantor A', 'bank' => '', 'pic' => '',
         ]);
         $this->assertSame(1, $import->importedCount());
 
@@ -151,7 +152,7 @@ class PoiImportTest extends TestCase
         $this->assertSame(1, $summary['rejected']);
 
         $reasons = collect($summary['errors'])->flatMap(fn ($e) => $e['errors'])->implode(' | ');
-        $this->assertStringContainsString('Outlet wajib diisi', $reasons);
+        $this->assertStringContainsString('Cabang wajib diisi', $reasons);
 
         $this->assertDatabaseHas('poi', ['nama_poi' => 'Toko Valid A', 'kantor_id' => $kantorA->id]);
         $this->assertDatabaseHas('poi', ['nama_poi' => 'Toko Valid B', 'kantor_id' => $kantorB->id]);
@@ -328,12 +329,15 @@ class PoiImportTest extends TestCase
     }
 
     /**
-     * "Kategori" is accepted as an alias heading for "Sektor" (2026-07-22,
-     * fixing a real production incident: a source file used that label,
-     * WithHeadingRow didn't recognize it, and 8753 rows silently landed on
-     * the 'Lainnya' blank-fallback with no error raised anywhere).
+     * The final header set (Nama, Alamat, Kategori, Sub Kategori, Ring Area,
+     * Cabang, Bank, PIC — 2026-07-23) fully replaces the old Sektor/Sub
+     * Sektor/Area/Outlet naming, no backward-compat alias kept. A file still
+     * using the old headers must NOT be silently understood — "Sektor"/
+     * "Outlet" simply aren't recognized columns anymore, so a row with only
+     * those old headers has a blank Cabang and gets rejected, same as any
+     * other blank-Cabang row.
      */
-    public function test_admin_import_accepts_kategori_as_an_alias_heading_for_sektor(): void
+    public function test_old_sektor_and_outlet_headers_are_no_longer_recognized(): void
     {
         $admin = User::factory()->admin()->create(['force_password_change' => false]);
         Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
@@ -341,8 +345,78 @@ class PoiImportTest extends TestCase
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Sheet1');
-        $sheet->fromArray(['Nama', 'Alamat', 'Kategori', 'Sub Sektor', 'Area', 'Outlet', 'Bank', 'PIC'], null, 'A1');
-        $sheet->fromArray([['Toko Kategori', 'Jl. A No. 1', 'Retail', '', '', 'Kantor A', '', '']], null, 'A2');
+        $sheet->fromArray(['Nama', 'Alamat', 'Sektor', 'Sub Sektor', 'Area', 'Outlet', 'Bank', 'PIC'], null, 'A1');
+        $sheet->fromArray([['Toko Header Lama', 'Jl. A No. 1', 'Retail', '', '', 'Kantor A', '', '']], null, 'A2');
+
+        $path = tempnam(sys_get_temp_dir(), 'poi_import_').'.xlsx';
+        (new Xlsx($spreadsheet))->save($path);
+        $file = new UploadedFile($path, 'import.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+
+        $response = $this->actingAs($admin)->post('/poi-import', ['file' => $file]);
+
+        $response->assertRedirect(route('poi.import.create'));
+        $summary = session('import_summary');
+        $this->assertSame(0, $summary['imported']);
+        $this->assertSame(1, $summary['rejected']);
+        $this->assertDatabaseMissing('poi', ['nama_poi' => 'Toko Header Lama']);
+    }
+
+    /**
+     * Cabang-Cluster and Area (the new region-level column, distinct from
+     * Ring Area) are real columns in the current source file but are never
+     * read here — that hierarchy lives on the Cabang itself
+     * (kantor.area/cabang_cluster, set via Kelola Kantor) and a POI always
+     * displays it through its resolved Cabang, never its own row (see
+     * PoiImport's class docblock).
+     */
+    /**
+     * Cabang-Cluster/Area on a POI row stamp onto the resolved Cabang itself
+     * (2026-07-23) rather than being stored per-POI — a blank cell leaves the
+     * Cabang's existing value alone (same "blank means leave alone" rule as
+     * every other field here), a non-blank cell overwrites it.
+     */
+    public function test_cabang_cluster_and_area_columns_stamp_onto_the_resolved_cabang(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $kantorA = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A', 'area' => 'Area Lama', 'cabang_cluster' => 'Cluster Lama']);
+        $kantorB = Kantor::create(['kode' => 'B', 'nama' => 'Kantor B']);
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Sheet1');
+        $sheet->fromArray(['Nama', 'Alamat', 'Kategori', 'Sub Kategori', 'Ring Area', 'Cabang', 'Bank', 'PIC', 'Cabang-Cluster', 'Area'], null, 'A1');
+        $sheet->fromArray([
+            ['Toko Satu', 'Jl. A No. 1', 'Retail', '', 'Ring 1', 'Kantor A', '', '', 'Cluster Baru', 'Area Baru'],
+            // Blank Cabang-Cluster/Area on this row must not clobber what the row above (same Cabang) just set.
+            ['Toko Dua', 'Jl. A No. 2', 'Retail', '', 'Ring 1', 'Kantor A', '', '', '', ''],
+            ['Toko Tiga', 'Jl. B No. 1', 'Retail', '', 'Ring 1', 'Kantor B', '', '', 'Cluster B', 'Area B'],
+        ], null, 'A2');
+
+        $path = tempnam(sys_get_temp_dir(), 'poi_import_').'.xlsx';
+        (new Xlsx($spreadsheet))->save($path);
+        $file = new UploadedFile($path, 'import.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
+
+        $response = $this->actingAs($admin)->post('/poi-import', ['file' => $file]);
+
+        $response->assertRedirect(route('poi.import.create'));
+        $this->assertSame(3, session('import_summary')['imported']);
+
+        $this->assertSame('Area Baru', $kantorA->fresh()->area);
+        $this->assertSame('Cluster Baru', $kantorA->fresh()->cabang_cluster);
+        $this->assertSame('Area B', $kantorB->fresh()->area);
+        $this->assertSame('Cluster B', $kantorB->fresh()->cabang_cluster);
+    }
+
+    public function test_blank_cabang_cluster_and_area_on_import_leave_the_cabangs_existing_value_alone(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A', 'area' => 'Area Lama', 'cabang_cluster' => 'Cluster Lama']);
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Sheet1');
+        $sheet->fromArray(['Nama', 'Alamat', 'Kategori', 'Sub Kategori', 'Ring Area', 'Cabang', 'Bank', 'PIC', 'Cabang-Cluster', 'Area'], null, 'A1');
+        $sheet->fromArray([['Toko Baru', 'Jl. A No. 1', 'Retail', '', 'Ring 1', 'Kantor A', '', '', '', '']], null, 'A2');
 
         $path = tempnam(sys_get_temp_dir(), 'poi_import_').'.xlsx';
         (new Xlsx($spreadsheet))->save($path);
@@ -352,7 +426,8 @@ class PoiImportTest extends TestCase
 
         $response->assertRedirect(route('poi.import.create'));
         $this->assertSame(1, session('import_summary')['imported']);
-        $this->assertDatabaseHas('poi', ['nama_poi' => 'Toko Kategori', 'sektor' => 'Retail']);
+        $this->assertSame('Area Lama', $kantor->fresh()->area);
+        $this->assertSame('Cluster Lama', $kantor->fresh()->cabang_cluster);
     }
 
     public function test_admin_final_import_rejects_rows_for_unowned_kantor_even_if_kantor_is_valid(): void
@@ -396,7 +471,7 @@ class PoiImportTest extends TestCase
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Sheet1');
-        $sheet->fromArray(['Nama', 'Alamat', 'Sektor', 'Sub Sektor', 'Area', 'Outlet', 'Bank', 'PIC'], null, 'A1');
+        $sheet->fromArray(['Nama', 'Alamat', 'Kategori', 'Sub Kategori', 'Ring Area', 'Cabang', 'Bank', 'PIC'], null, 'A1');
         $sheet->fromArray([['Toko Satu Sheet', 'Jl. A No. 1', Poi::SEKTOR_OPTIONS[0], '', '', 'Kantor A', Poi::STATUS_MITRA_OPTIONS[0], '']], null, 'A2');
 
         $path = tempnam(sys_get_temp_dir(), 'poi_import_').'.xlsx';

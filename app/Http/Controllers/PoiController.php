@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\NarrowsKantorByAreaCluster;
 use App\Models\Kantor;
 use App\Models\Poi;
 use App\Models\PoiReopenLog;
@@ -27,19 +28,26 @@ use Illuminate\View\View;
  */
 class PoiController extends Controller
 {
+    use NarrowsKantorByAreaCluster;
+
     public function index(Request $request): View
     {
         $user = $request->user();
 
         $query = Poi::query()->with('kantor');
-        $kantorOptions = $this->scopeIndexQuery($query, $user, $request);
+        $scope = $this->scopeIndexQuery($query, $user, $request);
 
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
         }
 
-        if ($request->filled('area')) {
-            $query->where('area', $request->input('area'));
+        // The POI's own Ring Area (Poi::AREA_OPTIONS, "Ring 1".."Ring 4") —
+        // query param renamed `area` -> `ring_area` (2026-07-23) to free up
+        // `area` for the NEW Cabang-region filter below ($scope), which is a
+        // completely different concept (see PoiImport's class docblock for
+        // the same Ring Area vs Area distinction on the import side).
+        if ($request->filled('ring_area')) {
+            $query->where('area', $request->input('ring_area'));
         }
 
         if ($request->filled('sektor')) {
@@ -63,12 +71,16 @@ class PoiController extends Controller
 
         return view('poi.index', [
             'pois' => $pois,
-            'kantorOptions' => $kantorOptions,
+            'kantorOptions' => $scope['kantorOptions'],
+            'kantorAreaOptions' => $scope['areaOptions'],
+            'selectedKantorArea' => $scope['selectedArea'],
+            'kantorClusterOptions' => $scope['clusterOptions'],
+            'selectedKantorCluster' => $scope['selectedCluster'],
             'sektorOptions' => Poi::SEKTOR_OPTIONS,
-            'areaOptions' => Poi::AREA_OPTIONS,
+            'ringAreaOptions' => Poi::AREA_OPTIONS,
             'statusMitraOptions' => Poi::STATUS_MITRA_OPTIONS,
             'canManage' => $user->isAdmin() || $user->isAdminFinal(),
-            'filters' => $request->only(['kantor', 'status', 'area', 'sektor', 'status_mitra', 'q']),
+            'filters' => $request->only(['kantor', 'area', 'cluster', 'status', 'ring_area', 'sektor', 'status_mitra', 'q']),
         ]);
     }
 
@@ -209,39 +221,58 @@ class PoiController extends Controller
 
     /**
      * Applies the server-side kantor scope for the index listing and returns
-     * the kantor options the current user is allowed to filter by. This is
-     * the hard security boundary from the brief (old system's IDOR bug) —
-     * it must not be derived from anything the client sends unchecked.
+     * the kantor/area/cluster options + selections the current user is
+     * allowed to filter by. This is the hard security boundary from the
+     * brief (old system's IDOR bug) — it must not be derived from anything
+     * the client sends unchecked.
      *
-     * @return Collection<int, Kantor>
+     * Area/Cabang-Cluster (2026-07-23, via NarrowsKantorByAreaCluster) narrow
+     * the SAME role-scoped pool a specific `?kantor=` pick already draws
+     * from, before that pick is validated — so a forged `kantor` outside the
+     * currently-narrowed Area/Cluster is rejected exactly like a forged
+     * kantor outside admin_final's ownership always was.
+     *
+     * @return array{kantorOptions: Collection<int, Kantor>, areaOptions: Collection<int, string>, selectedArea: ?string, clusterOptions: Collection<int, string>, selectedCluster: ?string}
      */
-    private function scopeIndexQuery($query, User $user, Request $request): Collection
+    private function scopeIndexQuery($query, User $user, Request $request): array
     {
-        if ($user->isAdmin()) {
-            if ($request->filled('kantor')) {
-                $query->where('kantor_id', (int) $request->input('kantor'));
-            }
+        if ($user->isSales()) {
+            // hard-scoped to the single session-locked active kantor, the
+            // `kantor`/`area`/`cluster` query params are ignored entirely
+            // (never trusted) — no picker renders for sales anyway.
+            $query->where('kantor_id', (int) session('active_kantor_id'));
 
-            return Kantor::where('kode', '!=', Kantor::SENTINEL_ALL_KODE)->orderBy('nama')->get();
+            return [
+                'kantorOptions' => new Collection(),
+                'areaOptions' => new Collection(),
+                'selectedArea' => null,
+                'clusterOptions' => new Collection(),
+                'selectedCluster' => null,
+            ];
         }
 
-        if ($user->isAdminFinal()) {
-            $ownedIds = $user->kantor()->pluck('kantor.id');
+        $allowedKantor = $user->isAdmin()
+            ? Kantor::where('kode', '!=', Kantor::SENTINEL_ALL_KODE)->orderBy('nama')->get()
+            : $user->kantor()->orderBy('nama')->get();
 
-            if ($request->filled('kantor') && $ownedIds->contains((int) $request->input('kantor'))) {
-                $query->where('kantor_id', (int) $request->input('kantor'));
-            } else {
-                $query->whereIn('kantor_id', $ownedIds);
+        $narrowed = $this->narrowKantorByAreaCluster($request, $allowedKantor);
+        $narrowedIds = $narrowed['kantorOptions']->pluck('id')->all();
+
+        if ($request->filled('kantor') && in_array((int) $request->input('kantor'), $narrowedIds, true)) {
+            $query->where('kantor_id', (int) $request->input('kantor'));
+        } elseif ($user->isAdmin()) {
+            // Admin's true default (nothing picked at any level) stays
+            // unconstrained — only add a whereIn once Area/Cluster actually
+            // narrowed the pool below "every kantor".
+            if ($narrowed['selectedArea'] !== null || $narrowed['selectedCluster'] !== null) {
+                $query->whereIn('kantor_id', $narrowedIds);
             }
-
-            return $user->kantor()->orderBy('nama')->get();
+        } else {
+            // admin_final: always constrained to at least their owned set.
+            $query->whereIn('kantor_id', $narrowedIds);
         }
 
-        // sales: hard-scoped to the single session-locked active kantor, the
-        // `kantor` query param is ignored entirely (never trusted).
-        $query->where('kantor_id', (int) session('active_kantor_id'));
-
-        return new Collection();
+        return $narrowed;
     }
 
     private function kantorOptionsFor(User $user): Collection

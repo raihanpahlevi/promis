@@ -545,6 +545,34 @@ class KunjunganTest extends TestCase
         $this->assertEquals(0, $response->viewData('kunjungans')->count());
     }
 
+    public function test_area_filter_narrows_riwayat_kunjungan_to_only_that_areas_kantor(): void
+    {
+        $jakarta = Kantor::create(['kode' => 'A', 'nama' => 'Cabang Jakarta', 'area' => 'Area Jakarta']);
+        $bandung = Kantor::create(['kode' => 'B', 'nama' => 'Cabang Bandung', 'area' => 'Area Jabar']);
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+
+        $salesJkt = $this->sales($jakarta);
+        $salesBdg = $this->sales($bandung);
+        $poiJkt = $this->poi(['kantor_id' => $jakarta->id, 'status' => 'aktif']);
+        $poiBdg = $this->poi(['kantor_id' => $bandung->id, 'status' => 'aktif']);
+
+        $kJkt = Kunjungan::create([
+            'poi_id' => $poiJkt->id, 'sales_id' => $salesJkt->id,
+            'tanggal_kunjungan' => now(), 'hasil' => Kunjungan::HASIL_BERMINAT,
+        ]);
+        Kunjungan::create([
+            'poi_id' => $poiBdg->id, 'sales_id' => $salesBdg->id,
+            'tanggal_kunjungan' => now(), 'hasil' => Kunjungan::HASIL_CLOSING,
+        ]);
+
+        $response = $this->actingAs($admin)->get('/kunjungan?area='.urlencode('Area Jakarta'));
+
+        $response->assertOk();
+        $ids = $response->viewData('kunjungans')->pluck('id');
+        $this->assertTrue($ids->contains($kJkt->id));
+        $this->assertCount(1, $ids);
+    }
+
     public function test_admin_sees_kunjungan_across_all_kantor(): void
     {
         $kantorA = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);

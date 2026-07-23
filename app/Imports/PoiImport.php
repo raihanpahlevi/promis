@@ -20,28 +20,45 @@ use Throwable;
 
 /**
  * Bulk import for POI. Columns (heading row -> snake_case key): Nama, Alamat,
- * Sektor, Sub Sektor, Area, Outlet, Bank, PIC -> nama, alamat, sektor,
- * sub_sektor, area, outlet, bank, pic. An optional leading ID column (only
- * present in files produced by PoiExport) switches a row from insert to
- * update — see "ID-based upsert" below.
+ * Kategori, Sub Kategori, Ring Area, Cabang, Bank, PIC -> nama, alamat,
+ * kategori, sub_kategori, ring_area, cabang, bank, pic. An optional leading
+ * ID column (only present in files produced by PoiExport) switches a row
+ * from insert to update — see "ID-based upsert" below.
  *
- * "Kategori" is accepted as an alias heading for Sektor (2026-07-22) — a
- * real source file used that label instead of "Sektor", and since
- * WithHeadingRow only recognizes the exact column name, every row's sektor
- * silently landed on the 'Lainnya' blank-fallback below instead of raising
- * any error (8753 rows, one production incident). $row['sektor'] still wins
- * when a file has both; 'kategori' is only consulted when 'sektor' is
- * missing/blank.
+ * Header rename (2026-07-23, final — replaces the old Sektor/Sub Sektor/
+ * Area/Outlet naming entirely, no backward-compat alias kept): Sektor ->
+ * Kategori, Sub Sektor -> Sub Kategori, the ring-distance column (Area) ->
+ * Ring Area, Outlet -> Cabang. The internal DB columns/attribute names are
+ * unchanged (poi.sektor, poi.sub_sektor, poi.area, kantor.nama via
+ * kantor_id) — only the recognized import heading text and this class's
+ * local variable names follow the new terminology; renaming the DB schema
+ * itself was explicitly out of scope for this change.
+ *
+ * Two additional trailing columns — Cabang-Cluster and Area (a broader
+ * region, NOT the same thing as the ring-distance "Ring Area" above) — are
+ * NOT stored on the POI itself (see applyCabangClusterArea()): every POI row
+ * for the same Cabang would otherwise repeat the same two values, which is
+ * exactly the "two sources of truth" shape that lets them silently drift.
+ * Instead, a non-blank Cabang-Cluster/Area on a row stamps straight onto the
+ * resolved Cabang (kantor.cabang_cluster / kantor.area) — same "blank means
+ * leave alone" rule as every other field here — and a POI always displays
+ * the hierarchy by reading through its Cabang (PoiController@show), never
+ * from its own row. This also means a plain POI import IS how the Cabang ->
+ * Cabang-Cluster -> Area mapping gets set in the first place (2026-07-23,
+ * folded in here after the two-step "import Kelola Cabang mapping first,
+ * then POI" workflow proved to be one step too many in practice) — Kelola
+ * Kantor's own export/import still works too, for fixing the hierarchy
+ * without re-uploading the whole POI file.
  *
  * Deliberately lenient by design (explicit product decision, 2026-07-14):
- * **Outlet is the only field that can reject a row, and only when it's
- * blank.** A non-blank Outlet that doesn't match any existing kantor is NOT
+ * **Cabang is the only field that can reject a row, and only when it's
+ * blank.** A non-blank Cabang that doesn't match any existing kantor is NOT
  * a rejection — the real data has hundreds of kantor not pre-registered in
  * the system yet, and requiring someone to manually create each one first
  * would defeat the point of a bulk import. Instead, an admin's import
  * auto-creates the missing Kantor row (resolveOrCreateKantorId()) so
  * kantor_id stays a real, valid foreign key — never falls back to storing
- * the outlet name as free text, which would break every kantor-scoped
+ * the Cabang name as free text, which would break every kantor-scoped
  * filter/dashboard/RBAC check in the app. admin_final is the exception: they
  * stay strictly bounded to kantor they're already assigned to (user_kantor)
  * — an unrecognized name for them is just wrong/unowned, never "a new
@@ -49,20 +66,19 @@ use Throwable;
  * effectively an admin-level action. Every other field has a safe fallback
  * instead of rejecting the row:
  *   - nama/alamat blank -> '-' placeholder (never blank in the UI/search).
- *   - sektor / area -> stored as-is, whatever the file says (both are plain
- *     VARCHAR columns, not restricted to Poi::SEKTOR_OPTIONS/AREA_OPTIONS —
- *     that curated list is only enforced on the manual create/edit form's
- *     dropdown; import data is internal and doesn't need to match it). Only
- *     truly blank sektor falls back to 'Lainnya' since the column is NOT
- *     NULL; blank area stays null (already optional everywhere it's used).
- *     Exception: area DOES get one narrow normalization (normalizeArea(),
- *     2026-07-22) — a cell that's recognizably "Ring 1"/"ring2"/"RING  3"
- *     (case/whitespace-insensitive, jarak suffix optional) is canonicalized
- *     to the exact Poi::AREA_OPTIONS string ("Ring 1 (0 - 1 Km)", etc.), since
- *     the dashboard's ring breakdown filters on an exact string match — a
- *     near-miss like "Ring 1" would silently show up as 0 in every ring
- *     bucket despite the row existing. Anything that doesn't look like
- *     "Ring N" is left untouched, same lenient free-text handling as sektor.
+ *   - kategori / ring_area -> stored as-is into sektor/area, whatever the
+ *     file says (both are plain VARCHAR columns, not restricted to
+ *     Poi::SEKTOR_OPTIONS/AREA_OPTIONS — that curated list is only enforced
+ *     on the manual create/edit form's dropdown; import data is internal and
+ *     doesn't need to match it). Only truly blank kategori falls back to
+ *     'Lainnya' since the column is NOT NULL; blank ring_area stays null
+ *     (already optional everywhere it's used). Exception: ring_area DOES get
+ *     one narrow normalization (normalizeArea()) — a cell that's recognizably
+ *     "Ring 1"/"ring2"/"RING  3" (case/whitespace-insensitive) is
+ *     canonicalized to the exact Poi::AREA_OPTIONS string ("Ring 1", etc.),
+ *     since the dashboard's ring breakdown filters on an exact string match
+ *     — a near-miss wouldn't count. Anything that doesn't look like "Ring N"
+ *     is left untouched, same lenient free-text handling as kategori.
  *   - bank not one of the 3 canonical status_mitra values -> falls back to
  *     Poi::BELUM_BERMITRA_BNI, NOT any other bucket: that's the only default
  *     that keeps the POI prospectable (visible to sales, countable in
@@ -70,14 +86,15 @@ use Throwable;
  *     hard-compares status_mitra (Dashboard's BNI/Non split, the "belum
  *     bermitra" pool KunjunganController offers sales to visit, the status
  *     badge). status_mitra stays a real ENUM (see migration) — unlike
- *     sektor/area it's hard-compared all over the app, so it can't become
- *     free text without breaking that math; "not a recognized BNI value" is
- *     just treated as "not a BNI partner yet", which is the correct bucket.
- * Outlet/bank matching is case-insensitive and tolerant of extra whitespace
+ *     kategori/ring_area it's hard-compared all over the app, so it can't
+ *     become free text without breaking that math; "not a recognized BNI
+ *     value" is just treated as "not a BNI partner yet", which is the
+ *     correct bucket.
+ * Cabang/bank matching is case-insensitive and tolerant of extra whitespace
  * (normalize()), so formatting differences in a hand-built source file don't
- * trip either the fallback or the outlet rejection.
+ * trip either the fallback or the Cabang rejection.
  *
- * sub_sektor additionally treats a literal "nan" as blank (cleanSubSektor())
+ * sub_kategori additionally treats a literal "nan" as blank (cleanSubSektor())
  * — a common artifact of blank cells round-tripping through pandas/NaN-aware
  * tooling before landing back in Excel/CSV.
  *
@@ -97,9 +114,9 @@ use Throwable;
  * fallbacks: a blank cell on an update row means "leave this field alone"
  * (that's the entire point — filling in gaps without clobbering whatever's
  * already correct), never "clear it" and never the insert-time placeholder
- * ('-' / 'Lainnya' / Poi::BELUM_BERMITRA_BNI). Only Outlet stays
+ * ('-' / 'Lainnya' / Poi::BELUM_BERMITRA_BNI). Only Cabang stays
  * unconditionally required and always drives kantor_id (on both insert and
- * update) — an update row can reassign a POI's kantor by changing Outlet,
+ * update) — an update row can reassign a POI's kantor by changing Cabang,
  * same as PoiController::update() already allows via the manual edit form.
  * An unrecognized (non-blank) Bank value on an update row is also just
  * ignored (kept as-is) rather than falling back to Poi::BELUM_BERMITRA_BNI —
@@ -150,6 +167,9 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
     /** @var array<string, int> normalize(kantor.nama) => kantor.id */
     private array $kantorMap;
 
+    /** @var array<int, array{area: ?string, cabang_cluster: ?string}> kantor.id => its current area/cabang_cluster, kept in sync as this import writes to them (avoids re-querying per POI row — see applyCabangClusterArea()) */
+    private array $kantorAreaClusterCache;
+
     /** @var array<string, string> normalize(value) => canonical Poi::STATUS_MITRA_OPTIONS value */
     private array $statusMitraMap;
 
@@ -167,8 +187,10 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
     public function __construct(private readonly User $user, private readonly string $sheetName = 'Data POI')
     {
         $this->kantorMap = [];
-        foreach (Kantor::where('kode', '!=', Kantor::SENTINEL_ALL_KODE)->pluck('id', 'nama') as $nama => $id) {
-            $this->kantorMap[$this->normalize($nama)] = $id;
+        $this->kantorAreaClusterCache = [];
+        foreach (Kantor::where('kode', '!=', Kantor::SENTINEL_ALL_KODE)->get(['id', 'nama', 'area', 'cabang_cluster']) as $kantor) {
+            $this->kantorMap[$this->normalize($kantor->nama)] = $kantor->id;
+            $this->kantorAreaClusterCache[$kantor->id] = ['area' => $kantor->area, 'cabang_cluster' => $kantor->cabang_cluster];
         }
 
         $this->statusMitraMap = collect(Poi::STATUS_MITRA_OPTIONS)->mapWithKeys(fn ($v) => [$this->normalize($v) => $v])->all();
@@ -180,15 +202,16 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
 
     public function model(array $row): ?Poi
     {
-        $outletRaw = trim((string) ($row['outlet'] ?? ''));
+        $cabangRaw = trim((string) ($row['cabang'] ?? ''));
 
-        // Blank outlet is the only thing rules() rejects, so this only ever
+        // Blank Cabang is the only thing rules() rejects, so this only ever
         // returns null here as a defensive guard, not the normal path.
-        if ($outletRaw === '') {
+        if ($cabangRaw === '') {
             return null;
         }
 
-        $kantorId = $this->resolveOrCreateKantorId($outletRaw);
+        $kantorId = $this->resolveOrCreateKantorId($cabangRaw);
+        $this->applyCabangClusterArea($kantorId, $row['cabang_cluster'] ?? null, $row['area'] ?? null);
         $idRaw = trim((string) ($row['id'] ?? ''));
 
         if ($idRaw !== '') {
@@ -197,8 +220,8 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
 
         $nama = trim((string) ($row['nama'] ?? ''));
         $alamat = trim((string) ($row['alamat'] ?? ''));
-        $sektor = trim((string) ($row['sektor'] ?? $row['kategori'] ?? ''));
-        $area = $this->normalizeArea($row['area'] ?? null);
+        $kategori = trim((string) ($row['kategori'] ?? ''));
+        $ringArea = $this->normalizeArea($row['ring_area'] ?? null);
         $bank = $this->statusMitraMap[$this->normalize((string) ($row['bank'] ?? ''))] ?? Poi::BELUM_BERMITRA_BNI;
 
         $this->importedCount++;
@@ -206,9 +229,9 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
         return new Poi([
             'nama_poi' => $nama !== '' ? $nama : '-',
             'alamat' => $alamat !== '' ? $alamat : '-',
-            'sektor' => $sektor !== '' ? $sektor : 'Lainnya',
-            'sub_sektor' => $this->cleanSubSektor($row['sub_sektor'] ?? null),
-            'area' => $area,
+            'sektor' => $kategori !== '' ? $kategori : 'Lainnya',
+            'sub_sektor' => $this->cleanSubSektor($row['sub_kategori'] ?? null),
+            'area' => $ringArea,
             'kantor_id' => $kantorId,
             'status_mitra' => $bank,
             'pic' => $this->blankToNull($row['pic'] ?? null),
@@ -239,13 +262,13 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
 
         $nama = trim((string) ($row['nama'] ?? ''));
         $alamat = trim((string) ($row['alamat'] ?? ''));
-        $sektor = trim((string) ($row['sektor'] ?? $row['kategori'] ?? ''));
-        $subSektor = $this->cleanSubSektor($row['sub_sektor'] ?? null);
-        $area = $this->normalizeArea($row['area'] ?? null);
+        $kategori = trim((string) ($row['kategori'] ?? ''));
+        $subKategori = $this->cleanSubSektor($row['sub_kategori'] ?? null);
+        $ringArea = $this->normalizeArea($row['ring_area'] ?? null);
         $bank = $this->statusMitraMap[$this->normalize((string) ($row['bank'] ?? ''))] ?? null;
         $pic = $this->blankToNull($row['pic'] ?? null);
 
-        // Outlet is the only always-required field, so kantor_id always applies.
+        // Cabang is the only always-required field, so kantor_id always applies.
         $poi->kantor_id = $kantorId;
         if ($nama !== '') {
             $poi->nama_poi = $nama;
@@ -253,14 +276,14 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
         if ($alamat !== '') {
             $poi->alamat = $alamat;
         }
-        if ($sektor !== '') {
-            $poi->sektor = $sektor;
+        if ($kategori !== '') {
+            $poi->sektor = $kategori;
         }
-        if ($subSektor !== null) {
-            $poi->sub_sektor = $subSektor;
+        if ($subKategori !== null) {
+            $poi->sub_sektor = $subKategori;
         }
-        if ($area !== null) {
-            $poi->area = $area;
+        if ($ringArea !== null) {
+            $poi->area = $ringArea;
         }
         if ($bank !== null) {
             $poi->status_mitra = $bank;
@@ -275,30 +298,30 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
     }
 
     /**
-     * Outlet is the only rejectable field, and only when blank — see class
-     * docblock for why an unrecognized (non-blank) outlet is NOT rejected
+     * Cabang is the only rejectable field, and only when blank — see class
+     * docblock for why an unrecognized (non-blank) Cabang is NOT rejected
      * for admin (auto-created in model() instead), and why it still IS
      * rejected for admin_final.
      */
     public function rules(): array
     {
         return [
-            'outlet' => ['required', 'string', function ($attribute, $value, $fail) {
+            'cabang' => ['required', 'string', function ($attribute, $value, $fail) {
                 $normalized = $this->normalize((string) $value);
                 $kantorId = $this->kantorMap[$normalized] ?? null;
 
                 if ($kantorId === null) {
                     if ($this->allowedKantorIds !== null) {
-                        $fail("Outlet '{$value}' tidak ditemukan di kantor yang Anda kelola.");
+                        $fail("Cabang '{$value}' tidak ditemukan di kantor yang Anda kelola.");
                     }
 
-                    // Unknown outlet, unrestricted (admin) user: not a
+                    // Unknown Cabang, unrestricted (admin) user: not a
                     // failure — model() creates the kantor.
                     return;
                 }
 
                 if ($this->allowedKantorIds !== null && ! in_array($kantorId, $this->allowedKantorIds, true)) {
-                    $fail("Outlet '{$value}' bukan kantor yang Anda kelola.");
+                    $fail("Cabang '{$value}' bukan kantor yang Anda kelola.");
                 }
             }],
             'id' => ['nullable', 'integer', function ($attribute, $value, $fail) {
@@ -324,7 +347,7 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
     public function customValidationAttributes(): array
     {
         return [
-            'outlet' => 'Outlet',
+            'cabang' => 'Cabang',
             'id' => 'ID',
         ];
     }
@@ -332,7 +355,7 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
     public function customValidationMessages(): array
     {
         return [
-            'outlet.required' => 'Outlet wajib diisi.',
+            'cabang.required' => 'Cabang wajib diisi.',
             'id.integer' => 'ID harus berupa angka.',
         ];
     }
@@ -403,25 +426,69 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
      * Looks up $kantorMap first (covers both pre-existing kantor and ones
      * already created earlier in this same import run — a name repeated
      * across many rows only ever creates one Kantor). Only reached for
-     * admin (rules() already rejects an unrecognized outlet for
+     * admin (rules() already rejects an unrecognized Cabang for
      * admin_final, so model() never calls this in that case) — creating
      * kantor on the fly is intentionally an admin-only side effect.
      */
-    private function resolveOrCreateKantorId(string $rawOutlet): int
+    private function resolveOrCreateKantorId(string $rawCabang): int
     {
-        $normalized = $this->normalize($rawOutlet);
+        $normalized = $this->normalize($rawCabang);
 
         if (isset($this->kantorMap[$normalized])) {
             return $this->kantorMap[$normalized];
         }
 
         $kantor = Kantor::create([
-            'kode' => $this->generateKode($rawOutlet),
-            'nama' => $rawOutlet,
+            'kode' => $this->generateKode($rawCabang),
+            'nama' => $rawCabang,
             'is_active' => true,
         ]);
 
+        $this->kantorAreaClusterCache[$kantor->id] = ['area' => null, 'cabang_cluster' => null];
+
         return $this->kantorMap[$normalized] = $kantor->id;
+    }
+
+    /**
+     * Stamps a POI row's Cabang-Cluster/Area columns onto the resolved
+     * Cabang itself (2026-07-23) — the real source file carries all three
+     * (Cabang, Cabang-Cluster, Area) on every row, so requiring a separate
+     * Kelola Cabang import first to set the hierarchy was one step too many
+     * in practice; this folds it into the same POI import instead. Same
+     * "blank means leave alone" semantics as everything else in this class —
+     * a blank cell never clears an existing value.
+     *
+     * Only issues an UPDATE when the incoming value actually differs from
+     * $kantorAreaClusterCache (kept in sync here), not once per POI row —
+     * many rows share the same Cabang, and a real file is ~184k POI rows
+     * against only ~139 Cabang, so a naive per-row write would be ~1300x more
+     * DB writes than necessary for data that's the same on every row.
+     */
+    private function applyCabangClusterArea(int $kantorId, mixed $rawCabangCluster, mixed $rawArea): void
+    {
+        $cabangCluster = $this->blankToNull($rawCabangCluster);
+        $area = $this->blankToNull($rawArea);
+
+        if ($cabangCluster === null && $area === null) {
+            return;
+        }
+
+        $current = $this->kantorAreaClusterCache[$kantorId];
+        $updates = [];
+
+        if ($cabangCluster !== null && $cabangCluster !== $current['cabang_cluster']) {
+            $updates['cabang_cluster'] = $cabangCluster;
+        }
+        if ($area !== null && $area !== $current['area']) {
+            $updates['area'] = $area;
+        }
+
+        if ($updates === []) {
+            return;
+        }
+
+        Kantor::whereKey($kantorId)->update($updates);
+        $this->kantorAreaClusterCache[$kantorId] = array_merge($current, $updates);
     }
 
     /**
@@ -450,7 +517,7 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
      * The regex only matches a bare "Ring" immediately followed by 1-4 and a
      * word boundary, so "Ring 10" or a value that merely contains "ring"
      * elsewhere doesn't false-positive; anything that doesn't match is
-     * returned trimmed but otherwise untouched (free text, same as sektor).
+     * returned trimmed but otherwise untouched (free text, same as kategori).
      *
      * "Ring 0" is deliberately NOT a 5th bucket (there's no such ring in
      * Poi::AREA_OPTIONS or the dashboard breakdown) — product decision
@@ -487,7 +554,7 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
     }
 
     /**
-     * Source files sometimes carry a literal "nan" in Sub Sektor — an
+     * Source files sometimes carry a literal "nan" in Sub Kategori — an
      * artifact of blank cells round-tripping through pandas/NaN-aware
      * tooling before being saved back to Excel/CSV, not a real value.
      * Treated the same as blank.

@@ -105,6 +105,63 @@ class PoiTest extends TestCase
         $response->assertOk()->assertSee('POI Mine')->assertDontSee('POI Other');
     }
 
+    // ---------------- Area / Cabang-Cluster filter (2026-07-23) ----------------
+
+    public function test_area_filter_narrows_the_poi_list_to_only_that_areas_kantor(): void
+    {
+        $jakarta = Kantor::create(['kode' => 'A', 'nama' => 'Cabang Jakarta', 'area' => 'Area Jakarta']);
+        $bandung = Kantor::create(['kode' => 'B', 'nama' => 'Cabang Bandung', 'area' => 'Area Jabar']);
+        $this->makePoi($jakarta, ['nama_poi' => 'POI Jakarta']);
+        $this->makePoi($bandung, ['nama_poi' => 'POI Bandung']);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $response = $this->actingAs($admin)->get('/poi?area='.urlencode('Area Jakarta'));
+
+        $response->assertOk()->assertSee('POI Jakarta')->assertDontSee('POI Bandung');
+    }
+
+    public function test_cluster_filter_narrows_within_the_selected_area(): void
+    {
+        $clusterA = Kantor::create(['kode' => 'A', 'nama' => 'Cabang A', 'area' => 'Area X', 'cabang_cluster' => 'Cluster A']);
+        $clusterB = Kantor::create(['kode' => 'B', 'nama' => 'Cabang B', 'area' => 'Area X', 'cabang_cluster' => 'Cluster B']);
+        $this->makePoi($clusterA, ['nama_poi' => 'POI Cluster A']);
+        $this->makePoi($clusterB, ['nama_poi' => 'POI Cluster B']);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $response = $this->actingAs($admin)->get('/poi?area='.urlencode('Area X').'&cluster='.urlencode('Cluster A'));
+
+        $response->assertOk()->assertSee('POI Cluster A')->assertDontSee('POI Cluster B');
+    }
+
+    public function test_ring_area_filter_still_works_independently_of_the_new_area_filter(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $this->makePoi($kantor, ['nama_poi' => 'POI Ring 1', 'area' => Poi::AREA_OPTIONS[0]]);
+        $this->makePoi($kantor, ['nama_poi' => 'POI Ring 2', 'area' => Poi::AREA_OPTIONS[1]]);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $response = $this->actingAs($admin)->get('/poi?ring_area='.urlencode(Poi::AREA_OPTIONS[0]));
+
+        $response->assertOk()->assertSee('POI Ring 1')->assertDontSee('POI Ring 2');
+    }
+
+    public function test_admin_finals_area_options_are_scoped_to_their_own_kantor_only(): void
+    {
+        $mine = Kantor::create(['kode' => 'MINE', 'nama' => 'Kantor Mine', 'area' => 'Area Saya']);
+        $other = Kantor::create(['kode' => 'OTHER', 'nama' => 'Kantor Other', 'area' => 'Area Lain']);
+        $adminFinal = User::factory()->adminFinal()->create(['force_password_change' => false]);
+        $adminFinal->kantor()->attach($mine->id);
+
+        $this->makePoi($mine, ['nama_poi' => 'POI Mine']);
+        $this->makePoi($other, ['nama_poi' => 'POI Other']);
+
+        // Forging an area they have no kantor in must not leak Other's POI in
+        // (falls back to their own full scope instead).
+        $response = $this->actingAs($adminFinal)->get('/poi?area='.urlencode('Area Lain'));
+
+        $response->assertOk()->assertSee('POI Mine')->assertDontSee('POI Other');
+    }
+
     public function test_sales_index_is_scoped_to_their_active_kantor_only(): void
     {
         $sales = User::factory()->create(['force_password_change' => false, 'role' => User::ROLE_SALES]);

@@ -40,6 +40,7 @@
         ],
         'Admin' => [
             ['label' => 'Kelola User', 'icon' => 'bi-person-gear', 'route' => 'user.index', 'roles' => ['admin']],
+            ['label' => 'Kelola Cabang', 'icon' => 'bi-building', 'route' => 'kantor.index', 'roles' => ['admin'], 'active_routes' => ['kantor.index', 'kantor.import.create']],
             ['label' => 'Pengaturan', 'icon' => 'bi-gear', 'route' => 'unit.index', 'roles' => ['admin']],
         ],
     ];
