@@ -20,6 +20,7 @@ class PoiImportTest extends TestCase
 {
     use RefreshDatabase;
     use RegistersPoiRoutes;
+    use \Tests\Concerns\ReadsImportSummary;
 
     protected function setUp(): void
     {
@@ -146,7 +147,7 @@ class PoiImportTest extends TestCase
         $response = $this->actingAs($admin)->post('/poi-import', ['file' => $file]);
 
         $response->assertRedirect(route('poi.import.create'));
-        $summary = session('import_summary');
+        $summary = $this->latestImportSummary();
 
         $this->assertSame(4, $summary['imported']);
         $this->assertSame(1, $summary['rejected']);
@@ -186,7 +187,7 @@ class PoiImportTest extends TestCase
         $response = $this->actingAs($admin)->post('/poi-import', ['file' => $file]);
 
         $response->assertRedirect(route('poi.import.create'));
-        $summary = session('import_summary');
+        $summary = $this->latestImportSummary();
 
         $this->assertSame(2, $summary['imported']);
         $this->assertSame(0, $summary['rejected']);
@@ -222,7 +223,7 @@ class PoiImportTest extends TestCase
         $response = $this->actingAs($adminFinal)->post('/poi-import', ['file' => $file]);
 
         $response->assertRedirect(route('poi.import.create'));
-        $summary = session('import_summary');
+        $summary = $this->latestImportSummary();
 
         $this->assertSame(0, $summary['imported']);
         $this->assertSame(1, $summary['rejected']);
@@ -242,7 +243,7 @@ class PoiImportTest extends TestCase
         $response = $this->actingAs($admin)->post('/poi-import', ['file' => $file]);
 
         $response->assertRedirect(route('poi.import.create'));
-        $this->assertSame(1, session('import_summary')['imported']);
+        $this->assertSame(1, $this->latestImportSummary()['imported']);
         $this->assertDatabaseHas('poi', ['nama_poi' => '-', 'alamat' => '-', 'kantor_id' => $kantor->id]);
     }
 
@@ -264,7 +265,7 @@ class PoiImportTest extends TestCase
         $response = $this->actingAs($admin)->post('/poi-import', ['file' => $file]);
 
         $response->assertRedirect(route('poi.import.create'));
-        $this->assertSame(3, session('import_summary')['imported']);
+        $this->assertSame(3, $this->latestImportSummary()['imported']);
         $this->assertDatabaseHas('poi', ['nama_poi' => 'Toko Nan', 'sub_sektor' => null]);
         $this->assertDatabaseHas('poi', ['nama_poi' => 'Toko Nan Besar', 'sub_sektor' => null]);
         $this->assertDatabaseHas('poi', ['nama_poi' => 'Toko Sub Sektor Asli', 'sub_sektor' => 'CAFE']);
@@ -288,7 +289,7 @@ class PoiImportTest extends TestCase
         $response = $this->actingAs($admin)->post('/poi-import', ['file' => $file]);
 
         $response->assertRedirect(route('poi.import.create'));
-        $this->assertSame(1, session('import_summary')['imported']);
+        $this->assertSame(1, $this->latestImportSummary()['imported']);
         $this->assertDatabaseHas('poi', [
             'nama_poi' => 'Toko Beda Huruf',
             'kantor_id' => $kantor->id,
@@ -320,7 +321,7 @@ class PoiImportTest extends TestCase
         $response = $this->actingAs($admin)->post('/poi-import', ['file' => $file]);
 
         $response->assertRedirect(route('poi.import.create'));
-        $this->assertSame(5, session('import_summary')['imported']);
+        $this->assertSame(5, $this->latestImportSummary()['imported']);
         $this->assertDatabaseHas('poi', ['nama_poi' => 'Toko Ring Pendek', 'area' => Poi::AREA_OPTIONS[0]]);
         $this->assertDatabaseHas('poi', ['nama_poi' => 'Toko Ring Beda Spasi', 'area' => Poi::AREA_OPTIONS[1]]);
         $this->assertDatabaseHas('poi', ['nama_poi' => 'Toko Ring Rapat', 'area' => Poi::AREA_OPTIONS[2]]);
@@ -355,7 +356,7 @@ class PoiImportTest extends TestCase
         $response = $this->actingAs($admin)->post('/poi-import', ['file' => $file]);
 
         $response->assertRedirect(route('poi.import.create'));
-        $summary = session('import_summary');
+        $summary = $this->latestImportSummary();
         $this->assertSame(0, $summary['imported']);
         $this->assertSame(1, $summary['rejected']);
         $this->assertDatabaseMissing('poi', ['nama_poi' => 'Toko Header Lama']);
@@ -399,7 +400,7 @@ class PoiImportTest extends TestCase
         $response = $this->actingAs($admin)->post('/poi-import', ['file' => $file]);
 
         $response->assertRedirect(route('poi.import.create'));
-        $this->assertSame(3, session('import_summary')['imported']);
+        $this->assertSame(3, $this->latestImportSummary()['imported']);
 
         $this->assertSame('Area Baru', $kantorA->fresh()->area);
         $this->assertSame('Cluster Baru', $kantorA->fresh()->cabang_cluster);
@@ -425,7 +426,7 @@ class PoiImportTest extends TestCase
         $response = $this->actingAs($admin)->post('/poi-import', ['file' => $file]);
 
         $response->assertRedirect(route('poi.import.create'));
-        $this->assertSame(1, session('import_summary')['imported']);
+        $this->assertSame(1, $this->latestImportSummary()['imported']);
         $this->assertSame('Area Lama', $kantor->fresh()->area);
         $this->assertSame('Cluster Lama', $kantor->fresh()->cabang_cluster);
     }
@@ -445,7 +446,7 @@ class PoiImportTest extends TestCase
         $response = $this->actingAs($adminFinal)->post('/poi-import', ['file' => $file]);
 
         $response->assertRedirect(route('poi.import.create'));
-        $summary = session('import_summary');
+        $summary = $this->latestImportSummary();
 
         $this->assertSame(1, $summary['imported']);
         $this->assertSame(1, $summary['rejected']);
@@ -481,7 +482,7 @@ class PoiImportTest extends TestCase
         $response = $this->actingAs($admin)->post('/poi-import', ['file' => $file]);
 
         $response->assertRedirect(route('poi.import.create'));
-        $this->assertSame(1, session('import_summary')['imported']);
+        $this->assertSame(1, $this->latestImportSummary()['imported']);
         $this->assertDatabaseHas('poi', ['nama_poi' => 'Toko Satu Sheet', 'kantor_id' => $kantor->id]);
     }
 
@@ -547,7 +548,7 @@ class PoiImportTest extends TestCase
         $response = $this->actingAs($admin)->post('/poi-import', ['file' => $file]);
 
         $response->assertRedirect(route('poi.import.create'));
-        $summary = session('import_summary');
+        $summary = $this->latestImportSummary();
         $this->assertSame(1, $summary['imported']);
         $this->assertSame(0, $summary['rejected']);
 
@@ -580,7 +581,7 @@ class PoiImportTest extends TestCase
         $response = $this->actingAs($admin)->post('/poi-import', ['file' => $file]);
 
         $response->assertRedirect(route('poi.import.create'));
-        $this->assertSame(1, session('import_summary')['imported']);
+        $this->assertSame(1, $this->latestImportSummary()['imported']);
 
         $poi->refresh();
         $this->assertSame($kantorNew->id, $poi->kantor_id);
@@ -599,7 +600,7 @@ class PoiImportTest extends TestCase
 
         $response = $this->actingAs($admin)->post('/poi-import', ['file' => $file]);
 
-        $summary = session('import_summary');
+        $summary = $this->latestImportSummary();
         $this->assertSame(0, $summary['imported']);
         $this->assertSame(1, $summary['rejected']);
         $reasons = collect($summary['errors'])->flatMap(fn ($e) => $e['errors'])->implode(' | ');
@@ -634,7 +635,7 @@ class PoiImportTest extends TestCase
 
         $response = $this->actingAs($adminFinal)->post('/poi-import', ['file' => $file]);
 
-        $summary = session('import_summary');
+        $summary = $this->latestImportSummary();
         $this->assertSame(0, $summary['imported']);
         $this->assertSame(1, $summary['rejected']);
         $reasons = collect($summary['errors'])->flatMap(fn ($e) => $e['errors'])->implode(' | ');
@@ -662,7 +663,7 @@ class PoiImportTest extends TestCase
 
         $response = $this->actingAs($adminFinal)->post('/poi-import', ['file' => $file]);
 
-        $this->assertSame(1, session('import_summary')['imported']);
+        $this->assertSame(1, $this->latestImportSummary()['imported']);
         $poi->refresh();
         $this->assertSame('PIC Terisi', $poi->pic);
     }
@@ -692,5 +693,51 @@ class PoiImportTest extends TestCase
         $this->assertSame(1, Kunjungan::count());
         $this->assertDatabaseHas('kunjungan', ['id' => $kunjungan->id, 'poi_id' => $poi->id]);
         $this->assertDatabaseHas('dashboard_summary', ['kantor_id' => $kantor->id, 'total_poi' => 1]);
+    }
+
+    // ---------------- Queued import lifecycle (2026-07-24) ----------------
+
+    public function test_upload_creates_an_import_job_that_finishes_done_with_counts(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+
+        $response = $this->actingAs($admin)->post('/poi-import', [
+            'file' => $this->buildFixture([
+                ['Toko Antri', 'Jl. Antrian 1', Poi::SEKTOR_OPTIONS[0], null, 'Ring 1', 'Kantor Antri', 'BNI - Merchant', null],
+            ]),
+        ]);
+
+        // The request itself only parks the file + job row (no waiting on the
+        // import) — the sync test queue then runs it before this assertion.
+        $response->assertRedirect(route('poi.import.create'));
+        $response->assertSessionHas('status');
+
+        $job = \App\Models\ImportJob::latest('id')->firstOrFail();
+        $this->assertSame(\App\Models\ImportJob::TYPE_POI, $job->type);
+        $this->assertSame(\App\Models\ImportJob::STATUS_DONE, $job->status);
+        $this->assertSame(1, $job->imported_count);
+        $this->assertSame(0, $job->rejected_count);
+        $this->assertSame($admin->id, $job->created_by);
+        $this->assertNotNull($job->finished_at);
+        // The parked upload is cleaned up once the job finishes.
+        $this->assertFalse(\Illuminate\Support\Facades\Storage::disk('local')->exists($job->stored_path));
+    }
+
+    public function test_import_page_lists_recent_jobs(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        \App\Models\ImportJob::create([
+            'type' => \App\Models\ImportJob::TYPE_POI,
+            'original_filename' => 'poi_riwayat_test.xlsx',
+            'stored_path' => 'imports/x.xlsx',
+            'status' => \App\Models\ImportJob::STATUS_DONE,
+            'imported_count' => 42,
+            'created_by' => $admin->id,
+        ]);
+
+        $this->actingAs($admin)->get('/poi-import')
+            ->assertOk()
+            ->assertSee('Riwayat Import')
+            ->assertSee('poi_riwayat_test.xlsx');
     }
 }

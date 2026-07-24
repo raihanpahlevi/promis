@@ -19,6 +19,7 @@ class UserImportTest extends TestCase
 {
     use RefreshDatabase;
     use RegistersUserRoutes;
+    use \Tests\Concerns\ReadsImportSummary;
 
     protected function setUp(): void
     {
@@ -111,7 +112,7 @@ class UserImportTest extends TestCase
         $response = $this->actingAs($admin)->post('/user-import', ['file' => $file]);
 
         $response->assertRedirect(route('user.import.create'));
-        $summary = session('import_summary');
+        $summary = $this->latestImportSummary();
 
         $this->assertSame(2, $summary['imported']);
         $this->assertSame(3, $summary['rejected']);
@@ -150,7 +151,7 @@ class UserImportTest extends TestCase
 
         $response = $this->actingAs($admin)->post('/user-import', ['file' => $file]);
 
-        $summary = session('import_summary');
+        $summary = $this->latestImportSummary();
         $this->assertSame(1, $summary['imported']);
         $this->assertSame(1, $summary['rejected']);
 
@@ -182,7 +183,7 @@ class UserImportTest extends TestCase
         $response = $this->actingAs($admin)->post('/user-import', ['file' => $file]);
 
         $response->assertRedirect(route('user.import.create'));
-        $summary = session('import_summary');
+        $summary = $this->latestImportSummary();
 
         $this->assertSame(3, $summary['imported']);
         $this->assertSame(0, $summary['rejected']);
@@ -218,7 +219,7 @@ class UserImportTest extends TestCase
         $response = $this->actingAs($admin)->post('/user-import', ['file' => $file]);
 
         $response->assertRedirect(route('user.import.create'));
-        $this->assertSame(1, session('import_summary')['imported']);
+        $this->assertSame(1, $this->latestImportSummary()['imported']);
 
         $user = User::where('npp', '6000001')->first();
         $this->assertNotNull($user);
@@ -249,7 +250,7 @@ class UserImportTest extends TestCase
         $response = $this->actingAs($admin)->post('/user-import', ['file' => $file]);
 
         $response->assertRedirect(route('user.import.create'));
-        $this->assertSame(1, session('import_summary')['imported']);
+        $this->assertSame(1, $this->latestImportSummary()['imported']);
         $this->assertTrue(User::where('npp', '7000001')->first()->hasKantor($kantor->id));
     }
 
