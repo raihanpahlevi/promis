@@ -41,14 +41,26 @@ class ProcessImport implements ShouldQueue
 
     public function handle(): void
     {
-        $job = ImportJob::find($this->importJobId);
+        // Atomic claim: this job is dispatched through TWO channels at once —
+        // dispatchAfterResponse() in the upload request (starts immediately,
+        // no cron needed) AND the database queue (cron insurance if the web
+        // process gets killed before claiming). Whichever runs first flips
+        // pending -> processing in a single UPDATE; the loser sees 0 affected
+        // rows and walks away. A plain find-then-update check would leave a
+        // race window where both import the same file.
+        $claimed = ImportJob::where('id', $this->importJobId)
+            ->where('status', ImportJob::STATUS_PENDING)
+            ->update(['status' => ImportJob::STATUS_PROCESSING, 'started_at' => now()]);
 
-        // Vanished or already picked up (double-fired cron, manual retry) — nothing to do.
-        if (! $job || $job->status !== ImportJob::STATUS_PENDING) {
+        if ($claimed === 0) {
             return;
         }
 
-        $job->update(['status' => ImportJob::STATUS_PROCESSING, 'started_at' => now()]);
+        $job = ImportJob::find($this->importJobId);
+
+        if (! $job) {
+            return;
+        }
 
         set_time_limit(0);
         ini_set('memory_limit', '-1');

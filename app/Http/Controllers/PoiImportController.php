@@ -28,6 +28,8 @@ class PoiImportController extends Controller
 
     public function create(): View
     {
+        ImportJob::sweepStale();
+
         return view('poi.import', [
             'recentJobs' => ImportJob::where('type', ImportJob::TYPE_POI)
                 ->latest()->limit(5)->get(),
@@ -51,7 +53,12 @@ class PoiImportController extends Controller
             'created_by' => $request->user()->id,
         ]);
 
-        ProcessImport::dispatch($job->id);
+        // Two channels on purpose (see ProcessImport::handle()'s atomic claim):
+        // afterResponse starts the import the moment the response is flushed —
+        // no cron needed for the happy path on this shared host — while the
+        // database queue is the cron-driven insurance for a killed process.
+        ProcessImport::dispatchAfterResponse($job->id);
+        ProcessImport::dispatch($job->id)->delay(now()->addMinutes(2));
 
         return redirect()->route('poi.import.create')->with(
             'status',

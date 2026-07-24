@@ -26,6 +26,8 @@ class UserImportController extends Controller
 
     public function create(): View
     {
+        ImportJob::sweepStale();
+
         return view('users.import', [
             'recentJobs' => ImportJob::where('type', ImportJob::TYPE_USER)
                 ->latest()->limit(5)->get(),
@@ -49,7 +51,9 @@ class UserImportController extends Controller
             'created_by' => $request->user()->id,
         ]);
 
-        ProcessImport::dispatch($job->id);
+        // Two channels on purpose — see PoiImportController::store().
+        ProcessImport::dispatchAfterResponse($job->id);
+        ProcessImport::dispatch($job->id)->delay(now()->addMinutes(2));
 
         return redirect()->route('user.import.create')->with(
             'status',

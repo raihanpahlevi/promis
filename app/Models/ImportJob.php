@@ -49,4 +49,23 @@ class ImportJob extends Model
     {
         return in_array($this->status, [self::STATUS_PENDING, self::STATUS_PROCESSING], true);
     }
+
+    /**
+     * Marks jobs stuck in pending/processing for hours as failed. A job can
+     * get stranded when the PHP process running it is hard-killed (FPM
+     * restart, host maintenance) — failed() never fires then, and without
+     * this sweep the import page would show "Sedang diproses" forever (and
+     * keep auto-refreshing). Called from the import pages' create() so the
+     * sweep runs exactly where the stale status would be seen.
+     */
+    public static function sweepStale(): void
+    {
+        static::whereIn('status', [self::STATUS_PENDING, self::STATUS_PROCESSING])
+            ->where('created_at', '<', now()->subHours(3))
+            ->update([
+                'status' => self::STATUS_FAILED,
+                'finished_at' => now(),
+                'result_summary' => ['error' => 'Proses terputus di tengah jalan (server restart) — silakan upload ulang.'],
+            ]);
+    }
 }
