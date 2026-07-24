@@ -173,8 +173,30 @@ class ExportTest extends TestCase
         $this->assertSame('Nama', $sheet->getCell('B1')->getValue());
         $this->assertEquals($poi->id, $sheet->getCell('A2')->getValue());
         $this->assertSame('Toko Satu', $sheet->getCell('B2')->getValue());
-        $this->assertSame('Outlet', $sheet->getCell('G1')->getValue());
+        $this->assertSame('Cabang', $sheet->getCell('G1')->getValue());
         $this->assertSame('Kantor Satu', $sheet->getCell('G2')->getValue());
+    }
+
+    /**
+     * Every export heading must slug down to exactly the row keys PoiImport
+     * reads (Maatwebsite's WithHeadingRow slugs headings the same way). After
+     * the 2026-07-23 import-header rewrite, the export kept emitting the OLD
+     * names (Sektor/Outlet/...) — the importer then found none of its columns
+     * in a re-uploaded export, which silently broke a production
+     * "export, fix, re-upload" repair (2026-07-24). This is the tripwire that
+     * was missing: change either side's columns and this fails.
+     */
+    public function test_poi_export_headings_slug_to_exactly_the_importer_row_keys(): void
+    {
+        $slugged = array_map(
+            fn ($heading) => \Illuminate\Support\Str::slug($heading, '_'),
+            (new PoiExport([1]))->headings(),
+        );
+
+        $this->assertSame(
+            ['id', 'nama', 'alamat', 'kategori', 'sub_kategori', 'ring_area', 'cabang', 'bank', 'pic'],
+            $slugged,
+        );
     }
 
     public function test_poi_export_area_filter_narrows_the_query(): void

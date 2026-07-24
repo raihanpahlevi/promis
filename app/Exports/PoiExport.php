@@ -54,9 +54,18 @@ class PoiExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMapping
             ->orderBy('id');
     }
 
+    /**
+     * MUST stay in lockstep with PoiImport's expected headings (Kategori/
+     * Sub Kategori/Ring Area/Cabang since the 2026-07-23 header rewrite) —
+     * this file's whole purpose is being re-uploadable through the importer.
+     * The old names (Sektor/Sub Sektor/Area/Outlet) lingering here after that
+     * rewrite made every exported file unreadable to the importer, which
+     * silently broke a production "export, fix, re-upload" repair attempt
+     * (2026-07-24) — the importer found none of its expected columns.
+     */
     public function headings(): array
     {
-        return ['ID', 'Nama', 'Alamat', 'Sektor', 'Sub Sektor', 'Area', 'Outlet', 'Bank', 'PIC'];
+        return ['ID', 'Nama', 'Alamat', 'Kategori', 'Sub Kategori', 'Ring Area', 'Cabang', 'Bank', 'PIC'];
     }
 
     /**
