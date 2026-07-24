@@ -52,10 +52,15 @@ class KunjunganExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMa
             ->orderBy('id');
     }
 
+    /**
+     * Report-only export (never re-imported), but the labels still follow the
+     * 2026-07-23 app-wide rename: Sektor -> Kategori, Area -> Ring Area,
+     * Kantor -> Cabang. The underlying poi columns keep their legacy names.
+     */
     public function headings(): array
     {
         return [
-            'Tanggal', 'Kantor', 'Nama POI', 'Alamat', 'Sektor', 'Area', 'Status Mitra', 'PIC',
+            'Tanggal', 'Cabang', 'Nama POI', 'Alamat', 'Kategori', 'Ring Area', 'Status Mitra', 'PIC',
             'Sales', 'Produk Ditawarkan', 'Hasil', 'Nominal', 'Catatan',
         ];
     }
