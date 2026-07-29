@@ -46,6 +46,13 @@
   // donut's biggest slice.
   $top = collect($items)->sortByDesc('total')->first();
 
+  // Share of the donut, i.e. how much of these five kategori the biggest one
+  // accounts for. Deliberately NOT the `persen` shown in the legend — that one
+  // is BNI penetration *within* a kategori and would contradict the slice the
+  // centre label sits in (the mockup's "(100%)" was a placeholder).
+  $sumTotal = array_sum(array_column($items, 'total'));
+  $topShare = $sumTotal > 0 ? round($top['total'] / $sumTotal * 100, 1) : 0;
+
   // Bars are scaled against the largest sub value in THIS panel, so the
   // longest bar is always full width and the rest stay comparable to it.
   $maxSub = 0;
@@ -74,6 +81,7 @@
         <canvas id="{{ $chartId }}"></canvas>
         <div class="topkat-donut-center">
           <b>{{ number_format($top['total']) }}</b>
+          <span class="topkat-donut-pct">{{ $topShare }}%</span>
           <small>{{ $top['sektor'] }}</small>
         </div>
       </div>
@@ -90,7 +98,8 @@
     </div>
 
     <p class="topkat-note">
-      Angka tengah = kategori teratas &middot; persen = porsi {{ $isBni ? 'BNI' : 'Non BNI' }} di dalam kategori itu
+      Tengah: kategori teratas &amp; porsinya dari 5 kategori &middot;
+      Daftar: porsi {{ $isBni ? 'BNI' : 'Non BNI' }} di dalam tiap kategori
     </p>
 
     <div class="topkat-cards">
