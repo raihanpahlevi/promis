@@ -231,13 +231,10 @@ tbody tr:hover{background:var(--brand-50)}
 .area-bar-fill.pct-high{background:linear-gradient(135deg,#2E7D32,#43A047)}
 .area-bar-fill.pct-vhigh{background:linear-gradient(135deg,#1565C0,#1E88E5)}
 
-.sektor-head{display:flex;justify-content:space-between;font-size:13px;font-weight:600;color:var(--brand-700);margin-top:10px}
-.sektor-head:first-child{margin-top:0}
+/* .sektor-head / .sub-dot / .dot-* removed 2026-07-29 — they only dressed the
+   old text-list Top Kategori panels, replaced by the .topkat components at
+   the end of this file. `.sub` stays: the auth screens still use it. */
 .sub{font-size:12px;color:#8A6B55;margin:4px 0 4px 10px}
-.sub-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
-.dot-green{background:var(--ok)}
-.dot-orange{background:var(--warn)}
-.dot-red{background:var(--danger)}
 
 .produk-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:6px}
 .produk-box{background:#fff;border:1.5px solid var(--brand-100);border-radius:8px;padding:8px 4px;text-align:center}
@@ -666,6 +663,97 @@ tbody tr{transition:background-color 150ms ease}
    "stuck". ---- */
 .content{transition:opacity 200ms ease}
 .content.is-submitting{opacity:.6}
+
+/* =========================================================================
+   Dashboard "Top Kategori" panels (2026-07-29) — donut + legend on top, one
+   card per kategori below with its top sub-kategori as labelled bars.
+   Palette comes from the panel's own inline colors (green ramp for BNI,
+   --brand-* brown ramp for Non BNI, both set in the partial) so these rules
+   stay variant-agnostic.
+   ========================================================================= */
+/* Equal halves — .grid-2 is a 1.4fr/1fr split built for a table+chart pairing,
+   which would leave the Non BNI panel visibly narrower than the BNI one. */
+.topkat-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:22px}
+.grid-1{margin-bottom:22px}
+@media (max-width:1100px){
+  .topkat-grid{grid-template-columns:1fr}
+}
+
+.topkat{display:flex;flex-direction:column}
+.topkat-head{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.topkat-head h3{font-size:15.5px;font-weight:800;margin:0}
+.topkat-badge{
+  width:38px;height:38px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:17px;
+}
+.topkat-bni .topkat-badge{background:#1B5E20}
+.topkat-non .topkat-badge{background:var(--brand-700)}
+.topkat-bni .topkat-head h3{color:#1B5E20}
+.topkat-non .topkat-head h3{color:var(--brand-900)}
+
+.topkat-overview{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+.topkat-donut{position:relative;width:170px;height:170px;flex-shrink:0}
+.topkat-donut-center{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;pointer-events:none;padding:0 26px;
+}
+.topkat-donut-center b{font-size:23px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}
+.topkat-donut-center small{font-size:10.5px;color:#8A6B55;margin-top:3px;line-height:1.25}
+
+.topkat-legend{list-style:none;margin:0;padding:0;flex:1;min-width:210px;display:flex;flex-direction:column;gap:9px}
+.topkat-legend li{display:flex;align-items:center;gap:9px;font-size:12.5px}
+.topkat-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.topkat-legend-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topkat-legend-val{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.topkat-legend-val em{font-style:normal;font-weight:500;color:#8A6B55}
+
+.topkat-note{font-size:11px;color:#8A6B55;margin:14px 0 0;text-align:center}
+
+.topkat-cards{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+.topkat-card{
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  border:1px solid var(--brand-100);border-radius:14px;padding:12px 14px;background:#fff;
+}
+.topkat-bni .topkat-card{background:linear-gradient(140deg,rgba(46,125,50,.045),#fff 55%)}
+.topkat-non .topkat-card{background:linear-gradient(140deg,var(--brand-50),#fff 55%)}
+.topkat-cat{display:flex;align-items:center;gap:11px;width:190px;flex-shrink:0}
+.topkat-icon{
+  width:38px;height:38px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;
+}
+/* Card icons and sub-bars stay one solid colour per panel — the donut ramp's
+   pale 4th/5th steps rendered a white glyph on a near-white circle. */
+.topkat-bni .topkat-icon{background:#2E7D32}
+.topkat-non .topkat-icon{background:var(--brand-500)}
+.topkat-bni .topkat-bar i{background:#2E7D32}
+.topkat-non .topkat-bar i{background:var(--brand-500)}
+.topkat-cat-txt{min-width:0;line-height:1.3}
+.topkat-cat-txt b{display:block;font-size:13px;font-weight:700}
+.topkat-cat-txt small{font-size:11.5px;color:#8A6B55;font-variant-numeric:tabular-nums}
+
+.topkat-subs{flex:1;min-width:230px;display:flex;flex-direction:column;gap:7px;border-left:1px solid var(--brand-100);padding-left:16px}
+.topkat-sub{display:flex;align-items:center;gap:10px;font-size:11px}
+/* Wide enough for the real long ones ("LOCAL GOVERNMENT OFFICE",
+   "CONVENIENCE STORE") — at 120px they all ellipsised into "…". */
+.topkat-sub-lbl{
+  width:158px;flex-shrink:0;text-transform:uppercase;letter-spacing:.2px;color:var(--brand-700);
+  font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;
+}
+.topkat-bar{flex:1;min-width:32px;height:6px;border-radius:999px;background:var(--brand-50);overflow:hidden}
+.topkat-bar i{display:block;height:100%;border-radius:999px;transition:width 500ms cubic-bezier(.22,1,.36,1)}
+.topkat-sub-val{width:96px;flex-shrink:0;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.topkat-sub-val em{font-style:normal;font-weight:500;color:#8A6B55}
+.topkat-sub-empty{color:#8A6B55;font-style:italic;text-transform:none}
+
+@media (max-width:900px){
+  .topkat-cat{width:100%}
+  .topkat-subs{border-left:none;border-top:1px solid var(--brand-100);padding-left:0;padding-top:10px;min-width:0}
+}
+@media (max-width:640px){
+  .topkat-overview{justify-content:center}
+  .topkat-sub-lbl{width:88px}
+  .topkat-sub-val{width:82px}
+}
 
 /* ---- Respect the OS-level motion preference: near-zero-duration instead
    of literally none, so this stays a single global switch without having

@@ -156,43 +156,15 @@
     </div>
   </div>
 
-  <div class="grid-3">
-    <div class="panel">
-      <div class="panel-head"><h3>Top Kategori &ndash; BNI</h3></div>
-      @forelse ($sektor['bni'] as $s)
-        <div class="sektor-head">
-          <span>{{ $s['sektor'] }}</span>
-          <span>{{ number_format($s['total']) }} ({{ $s['persen'] }}%)</span>
-        </div>
-        @forelse ($s['subs'] as $sub)
-          @php($color = $sub['persen'] >= 40 ? 'dot-green' : ($sub['persen'] >= 15 ? 'dot-orange' : 'dot-red'))
-          <div class="sub"><span class="sub-dot {{ $color }}"></span>{{ $sub['sub_sektor'] }} ({{ $sub['total'] }} | {{ $sub['persen'] }}%)</div>
-        @empty
-          <div class="sub"><span class="sub-dot dot-red"></span>Tidak ada sub sektor</div>
-        @endforelse
-      @empty
-        <div class="empty-state">Belum ada data sektor.</div>
-      @endforelse
-    </div>
+  {{-- Two equal full-width columns (2026-07-29 redesign): these panels used to
+       be squeezed into a 3-up row alongside Hasil Kunjungan Sales, which left
+       no room for the donut + per-kategori sub-bars. --}}
+  <div class="topkat-grid">
+    @include('partials.top-kategori', ['items' => $sektor['bni'], 'variant' => 'bni', 'chartId' => 'topkatBni'])
+    @include('partials.top-kategori', ['items' => $sektor['non'], 'variant' => 'non', 'chartId' => 'topkatNon'])
+  </div>
 
-    <div class="panel">
-      <div class="panel-head"><h3>Top Kategori &ndash; Non BNI</h3></div>
-      @forelse ($sektor['non'] as $s)
-        <div class="sektor-head">
-          <span>{{ $s['sektor'] }}</span>
-          <span>{{ number_format($s['total']) }} ({{ $s['persen'] }}%)</span>
-        </div>
-        @forelse ($s['subs'] as $sub)
-          @php($color = $sub['persen'] >= 40 ? 'dot-green' : ($sub['persen'] >= 15 ? 'dot-orange' : 'dot-red'))
-          <div class="sub"><span class="sub-dot {{ $color }}"></span>{{ $sub['sub_sektor'] }} ({{ $sub['total'] }} | {{ $sub['persen'] }}%)</div>
-        @empty
-          <div class="sub"><span class="sub-dot dot-red"></span>Tidak ada sub sektor</div>
-        @endforelse
-      @empty
-        <div class="empty-state">Belum ada data sektor.</div>
-      @endforelse
-    </div>
-
+  <div class="grid-1">
     <div class="panel">
       <div class="panel-head" style="flex-wrap:wrap;gap:8px">
         <h3>Hasil Kunjungan Sales</h3>
