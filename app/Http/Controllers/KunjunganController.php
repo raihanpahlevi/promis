@@ -303,8 +303,8 @@ class KunjunganController extends Controller
                 ? ['status_mitra' => Poi::BELUM_BERMITRA_BNI]
                 : ['collecting_by' => null]);
 
-            app(DashboardSummaryService::class)->reverseKunjungan($poi->kantor_id, $isClosing, $kunjungan->tanggal_kunjungan);
-
+            // dashboard_summary is reversed by KunjunganObserver::deleted()
+            // (2026-07-29) — reversing here too would double-subtract.
             $kunjungan->produkList()->delete();
             $kunjungan->delete();
 
@@ -316,6 +316,46 @@ class KunjunganController extends Controller
         }
 
         return back()->with('status', 'Kunjungan berhasil direopen — POI dikembalikan ke status semula.');
+    }
+
+    /**
+     * Hard delete of one riwayat row (admin only — routes/kunjungan.php).
+     * Complements reopen(): reopen is the *business* correction and is limited
+     * to a Closing/Collecting row that is still the latest for its POI, while
+     * this is the *data-entry* correction and works on any row, including
+     * "Belum Bertemu Key Person" and older non-latest rows that reopen refuses.
+     *
+     * The POI's derived state is only rolled back when THIS row is the one
+     * that produced it (i.e. it's still the latest) — rolling back from an
+     * older row would clobber whatever a newer visit has since set. Same
+     * lock-then-recheck ordering as reopen() so two concurrent deletes can't
+     * both decide they're the latest. dashboard_summary is handled by
+     * KunjunganObserver::deleted().
+     */
+    public function destroy(Kunjungan $kunjungan): RedirectResponse
+    {
+        $poi = $kunjungan->poi;
+
+        DB::transaction(function () use ($kunjungan, $poi) {
+            if ($poi !== null) {
+                Poi::whereKey($poi->id)->lockForUpdate()->value('id');
+
+                $latest = Kunjungan::where('poi_id', $poi->id)->orderByDesc('id')->lockForUpdate()->first();
+
+                if ($latest !== null && $latest->id === $kunjungan->id) {
+                    if ($kunjungan->hasil === Kunjungan::HASIL_CLOSING) {
+                        $poi->update(['status_mitra' => Poi::BELUM_BERMITRA_BNI]);
+                    } elseif ($kunjungan->hasil === Kunjungan::HASIL_COLLECTING_DOKUMEN) {
+                        $poi->update(['collecting_by' => null]);
+                    }
+                }
+            }
+
+            $kunjungan->produkList()->delete();
+            $kunjungan->delete();
+        });
+
+        return back()->with('status', 'Riwayat kunjungan berhasil dihapus permanen.');
     }
 
     /**

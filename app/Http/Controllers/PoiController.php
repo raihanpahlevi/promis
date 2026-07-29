@@ -211,7 +211,19 @@ class PoiController extends Controller
         $nama = $poi->nama_poi;
         $kunjunganCount = $poi->kunjungan()->count();
 
-        $poi->delete();
+        DB::transaction(function () use ($poi) {
+            // Delete the visits through Eloquent BEFORE the POI, even though
+            // kunjungan.poi_id is cascadeOnDelete: a DB-level cascade never
+            // fires KunjunganObserver::deleted(), so their contribution would
+            // stay stuck in dashboard_summary and inflate the visit/closing
+            // counters forever (2026-07-29).
+            $poi->kunjungan()->each(function ($kunjungan) {
+                $kunjungan->produkList()->delete();
+                $kunjungan->delete();
+            });
+
+            $poi->delete();
+        });
 
         $suffix = $kunjunganCount > 0 ? " {$kunjunganCount} kunjungan terkait ikut terhapus." : '';
 

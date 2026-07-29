@@ -31,3 +31,10 @@ Route::get('/kunjungan', [KunjunganController::class, 'index'])
 Route::post('/kunjungan/{kunjungan}/reopen', [KunjunganController::class, 'reopen'])
     ->name('kunjungan.reopen')
     ->middleware('role:admin,admin_final');
+
+// Hard delete of a riwayat row — admin only, stricter than reopen above
+// (which admin_final also gets): this works on ANY row, can't be undone, and
+// unlike reopen isn't a business correction but a data-entry cleanup.
+Route::delete('/kunjungan/{kunjungan}', [KunjunganController::class, 'destroy'])
+    ->name('kunjungan.destroy')
+    ->middleware('role:admin');

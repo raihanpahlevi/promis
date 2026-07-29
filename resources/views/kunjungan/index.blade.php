@@ -125,13 +125,23 @@
                 <td><span class="badge {{ $k->hasilBadgeClass() }}">{{ $k->hasil }}</span></td>
                 <td>{{ $k->norek_cif ?? '-' }}</td>
                 <td class="num" style="text-align:right">{{ $k->nominal !== null ? 'Rp '.number_format((float) $k->nominal, 0, ',', '.') : '-' }}</td>
-                <td>
+                <td class="cell-actions">
                   @if ($canReopen)
-                    <form method="POST" action="{{ route('kunjungan.reopen', $k) }}"
+                    <form method="POST" action="{{ route('kunjungan.reopen', $k) }}" style="display:inline"
                           onsubmit="return confirm('Yakin reopen kunjungan ini? POI akan dikembalikan ke status semula dan baris ini akan dihapus dari riwayat.');">
                       @csrf
-                      <button type="submit" style="border:none;background:none;color:var(--danger);cursor:pointer;font-size:12px;white-space:nowrap">
+                      <button type="submit" class="action-link" style="background:none;border:none;font:inherit;cursor:pointer;white-space:nowrap">
                         <i class="bi bi-arrow-counterclockwise"></i> Reopen
+                      </button>
+                    </form>
+                  @endif
+                  @if (auth()->user()->isAdmin())
+                    <form method="POST" action="{{ route('kunjungan.destroy', $k) }}" style="display:inline"
+                          onsubmit="return confirm('Hapus permanen riwayat kunjungan {{ addslashes($k->poi->nama_poi ?? '-') }} tanggal {{ $k->tanggal_kunjungan->format('d/m/Y') }}? Aksi ini tidak bisa dibatalkan.');">
+                      @csrf
+                      @method('DELETE')
+                      <button type="submit" class="action-link danger" style="background:none;border:none;font:inherit;cursor:pointer;white-space:nowrap">
+                        <i class="bi bi-trash3"></i> Hapus
                       </button>
                     </form>
                   @endif

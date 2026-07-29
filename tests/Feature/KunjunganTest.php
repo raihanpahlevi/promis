@@ -854,4 +854,123 @@ class KunjunganTest extends TestCase
         $this->assertStringContainsString('/kunjungan/'.$freshKunjungan->id.'/reopen', $html);
         $this->assertStringNotContainsString('/kunjungan/'.$supersededKunjungan->id.'/reopen', $html);
     }
+
+    // --- destroy() (hapus riwayat, admin only) ---------------------------
+
+    public function test_admin_deletes_a_non_closing_riwayat_row_that_reopen_would_refuse(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $sales = $this->sales($kantor);
+        $poi = $this->poi(['kantor_id' => $kantor->id, 'status' => 'aktif']);
+
+        $this->actingAs($sales)->post('/kunjungan', [
+            'poi_id' => $poi->id,
+            'hasil' => Kunjungan::HASIL_BELUM_BERTEMU,
+        ])->assertRedirect('/kunjungan/riwayat');
+
+        $kunjungan = Kunjungan::where('poi_id', $poi->id)->firstOrFail();
+        $this->assertDatabaseHas('dashboard_summary', ['kantor_id' => $kantor->id, 'total_kunjungan' => 1]);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $response = $this->actingAs($admin)->delete("/kunjungan/{$kunjungan->id}");
+
+        $response->assertRedirect();
+        $response->assertSessionHas('status');
+        $this->assertDatabaseMissing('kunjungan', ['id' => $kunjungan->id]);
+        // Reversed by KunjunganObserver::deleted(), not by the controller.
+        $this->assertDatabaseHas('dashboard_summary', ['kantor_id' => $kantor->id, 'total_kunjungan' => 0]);
+    }
+
+    public function test_deleting_the_latest_closing_row_also_rolls_the_poi_back(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $sales = $this->sales($kantor);
+        $poi = $this->poi(['kantor_id' => $kantor->id, 'status' => 'aktif']);
+
+        $this->actingAs($sales)->post('/kunjungan', [
+            'poi_id' => $poi->id,
+            'hasil' => Kunjungan::HASIL_CLOSING,
+            'status_mitra_baru' => 'Nasabah Merchant BNI',
+        ])->assertRedirect('/kunjungan/riwayat');
+
+        $kunjungan = Kunjungan::where('poi_id', $poi->id)->firstOrFail();
+        $this->assertSame('Nasabah Merchant BNI', $poi->fresh()->status_mitra);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $this->actingAs($admin)->delete("/kunjungan/{$kunjungan->id}")->assertRedirect();
+
+        $this->assertSame(Poi::BELUM_BERMITRA_BNI, $poi->fresh()->status_mitra);
+        $this->assertDatabaseHas('dashboard_summary', ['kantor_id' => $kantor->id, 'total_closing' => 0, 'total_kunjungan' => 0]);
+    }
+
+    /**
+     * The rollback is deliberately scoped to the row that actually produced
+     * the POI's current state — deleting an OLDER row must leave whatever the
+     * newer visit set alone.
+     */
+    public function test_deleting_an_older_row_does_not_touch_the_poi_state_set_by_a_newer_one(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $sales = $this->sales($kantor);
+        $poi = $this->poi(['kantor_id' => $kantor->id, 'status' => 'aktif']);
+
+        $this->actingAs($sales)->post('/kunjungan', [
+            'poi_id' => $poi->id,
+            'hasil' => Kunjungan::HASIL_BELUM_BERTEMU,
+        ])->assertRedirect('/kunjungan/riwayat');
+        $older = Kunjungan::where('poi_id', $poi->id)->orderBy('id')->firstOrFail();
+
+        $this->actingAs($sales)->post('/kunjungan', [
+            'poi_id' => $poi->id,
+            'hasil' => Kunjungan::HASIL_CLOSING,
+            'status_mitra_baru' => 'Nasabah Merchant BNI',
+        ])->assertRedirect('/kunjungan/riwayat');
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $this->actingAs($admin)->delete("/kunjungan/{$older->id}")->assertRedirect();
+
+        $this->assertDatabaseMissing('kunjungan', ['id' => $older->id]);
+        $this->assertSame('Nasabah Merchant BNI', $poi->fresh()->status_mitra, 'POI must keep the state the newer closing set.');
+    }
+
+    public function test_admin_final_and_sales_cannot_delete_a_riwayat_row(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $sales = $this->sales($kantor);
+        $poi = $this->poi(['kantor_id' => $kantor->id, 'status' => 'aktif']);
+
+        $this->actingAs($sales)->post('/kunjungan', [
+            'poi_id' => $poi->id,
+            'hasil' => Kunjungan::HASIL_BELUM_BERTEMU,
+        ])->assertRedirect('/kunjungan/riwayat');
+        $kunjungan = Kunjungan::where('poi_id', $poi->id)->firstOrFail();
+
+        $adminFinal = User::factory()->adminFinal()->create(['force_password_change' => false]);
+        $adminFinal->kantor()->attach($kantor->id);
+
+        $this->actingAs($adminFinal)->delete("/kunjungan/{$kunjungan->id}")->assertForbidden();
+        $this->actingAs($sales)->delete("/kunjungan/{$kunjungan->id}")->assertForbidden();
+        $this->assertDatabaseHas('kunjungan', ['id' => $kunjungan->id]);
+    }
+
+    public function test_hapus_button_shows_for_admin_but_not_for_admin_final(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $sales = $this->sales($kantor);
+        $poi = $this->poi(['kantor_id' => $kantor->id, 'status' => 'aktif']);
+
+        $this->actingAs($sales)->post('/kunjungan', [
+            'poi_id' => $poi->id,
+            'hasil' => Kunjungan::HASIL_BELUM_BERTEMU,
+        ])->assertRedirect('/kunjungan/riwayat');
+        $kunjungan = Kunjungan::where('poi_id', $poi->id)->firstOrFail();
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $this->actingAs($admin)->get('/kunjungan')->assertOk()->assertSee('Hapus');
+
+        $adminFinal = User::factory()->adminFinal()->create(['force_password_change' => false]);
+        $adminFinal->kantor()->attach($kantor->id);
+        $html = $this->actingAs($adminFinal)->get('/kunjungan')->assertOk()->getContent();
+        $this->assertStringNotContainsString('/kunjungan/'.$kunjungan->id.'"', $html);
+    }
 }
