@@ -53,12 +53,16 @@
   $sumTotal = array_sum(array_column($items, 'total'));
   $topShare = $sumTotal > 0 ? round($top['total'] / $sumTotal * 100, 1) : 0;
 
-  // Bars are scaled against the largest sub value in THIS panel, so the
-  // longest bar is always full width and the rest stay comparable to it.
-  $maxSub = 0;
-  foreach ($items as $item) {
+  // Bars are scaled against the biggest sub kategori OF THEIR OWN KATEGORI —
+  // so each card's top sub fills the track and its siblings read as a clear
+  // fraction of it. Scaling against the whole panel's maximum (the first cut)
+  // flattened most cards into near-identical stubs, because one kategori's
+  // leader dwarfed every other card's numbers.
+  $subMax = [];
+  foreach ($items as $i => $item) {
+      $subMax[$i] = 0;
       foreach ($item['subs'] as $sub) {
-          $maxSub = max($maxSub, (int) $sub['total']);
+          $subMax[$i] = max($subMax[$i], (int) $sub['total']);
       }
   }
 @endphp
@@ -117,8 +121,12 @@
             @forelse ($item['subs'] as $sub)
               <div class="topkat-sub">
                 <span class="topkat-sub-lbl" title="{{ $sub['sub_sektor'] }}">{{ $sub['sub_sektor'] }}</span>
+                @php($barWidth = ($subMax[$i] ?? 0) > 0 ? round($sub['total'] / $subMax[$i] * 100, 1) : 0)
                 <span class="topkat-bar">
-                  <i style="width:{{ $maxSub > 0 ? round($sub['total'] / $maxSub * 100, 1) : 0 }}%"></i>
+                  {{-- min-width only when there IS something to show: a tiny
+                       share would otherwise round down to an invisible
+                       sub-pixel, while a genuine 0 must stay empty. --}}
+                  <i style="width:{{ $barWidth }}%{{ $barWidth > 0 ? ';min-width:3px' : '' }}"></i>
                 </span>
                 <span class="topkat-sub-val">{{ number_format($sub['total']) }} <em>({{ $sub['persen'] }}%)</em></span>
               </div>
