@@ -348,4 +348,57 @@ class DashboardTest extends TestCase
             return $options->contains('Area Saya') && ! $options->contains('Area Lain');
         });
     }
+
+    // --- Top Kategori panels (independent ranking, 2026-07-29) -----------
+
+    /**
+     * Both panels used to reuse one ranking taken from the BNI counts, which
+     * made the Non-BNI panel list its kategori in the wrong order AND drop
+     * genuinely-bigger sub kategori in favour of whichever ones led on the BNI
+     * side. The fixture below is built so the two sides disagree on both:
+     * "Alpha" leads for BNI while "Beta" leads for Non-BNI, and inside Alpha
+     * "A-Bni" leads for BNI while "A-Non" leads for Non-BNI.
+     */
+    public function test_each_top_kategori_panel_is_ranked_by_its_own_side(): void
+    {
+        $kantor = Kantor::create(['kode' => 'K1', 'nama' => 'Kantor Satu']);
+        $bni = 'Nasabah Merchant BNI';
+        $non = Poi::BELUM_BERMITRA_BNI;
+
+        $make = function (int $times, string $sektor, string $sub, string $status) use ($kantor) {
+            for ($i = 0; $i < $times; $i++) {
+                $this->poi($kantor, ['sektor' => $sektor, 'sub_sektor' => $sub, 'status_mitra' => $status]);
+            }
+        };
+
+        // Alpha: strong on BNI, weak on Non-BNI.
+        $make(6, 'Alpha', 'A-Bni', $bni);
+        $make(1, 'Alpha', 'A-Non', $bni);
+        $make(2, 'Alpha', 'A-Bni', $non);
+        $make(9, 'Alpha', 'A-Non', $non);
+        // Beta: the reverse.
+        $make(2, 'Beta', 'B-One', $bni);
+        $make(40, 'Beta', 'B-One', $non);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $response = $this->actingAs($admin)->get('/dashboard');
+
+        $response->assertOk();
+        $sektor = $response->viewData('sektor');
+
+        $this->assertSame('Alpha', $sektor['bni'][0]['sektor'], 'BNI panel must lead with the kategori biggest on the BNI side.');
+        $this->assertSame('Beta', $sektor['non'][0]['sektor'], 'Non-BNI panel must lead with the kategori biggest on its own side.');
+
+        $alphaBni = collect($sektor['bni'])->firstWhere('sektor', 'Alpha');
+        $alphaNon = collect($sektor['non'])->firstWhere('sektor', 'Alpha');
+        $this->assertSame('A-Bni', $alphaBni['subs'][0]['sub_sektor'], 'BNI side ranks sub kategori by its own count.');
+        $this->assertSame('A-Non', $alphaNon['subs'][0]['sub_sektor'], 'Non-BNI side must not inherit the BNI side ordering.');
+
+        // Centre-of-donut figures cover every kategori, not just the plotted ones.
+        $this->assertSame(9, $sektor['total_bni']);
+        $this->assertSame(51, $sektor['total_non']);
+        $this->assertSame(60, $sektor['grand_total']);
+        $this->assertSame(15.0, $sektor['persen_bni']);
+        $this->assertSame(85.0, $sektor['persen_non']);
+    }
 }

@@ -39,19 +39,10 @@
       'Lainnya' => 'bi-three-dots',
   ];
 
-  // Biggest by count *within this panel*, not $items[0]: the 5 kategori are
-  // ranked by BNI count and that same order is reused for the Non BNI panel
-  // (a v1 quirk kept on purpose), so its first entry often isn't its largest —
-  // which would leave the centre label naming a different kategori than the
-  // donut's biggest slice.
-  $top = collect($items)->sortByDesc('total')->first();
-
-  // Share of the donut, i.e. how much of these five kategori the biggest one
-  // accounts for. Deliberately NOT the `persen` shown in the legend — that one
-  // is BNI penetration *within* a kategori and would contradict the slice the
-  // centre label sits in (the mockup's "(100%)" was a placeholder).
-  $sumTotal = array_sum(array_column($items, 'total'));
-  $topShare = $sumTotal > 0 ? round($top['total'] / $sumTotal * 100, 1) : 0;
+  // The centre reports this side's whole population, not the donut's five
+  // slices: $panelTotal counts every kategori, and $panelShare is its share of
+  // BNI + Non BNI together, so the two panels' centres read as one split
+  // (e.g. 3,6% vs 96,4%).
 
   // Bars are scaled against the biggest sub kategori OF THEIR OWN KATEGORI —
   // so each card's top sub fills the track and its siblings read as a clear
@@ -84,9 +75,9 @@
       <div class="topkat-donut">
         <canvas id="{{ $chartId }}"></canvas>
         <div class="topkat-donut-center">
-          <b>{{ number_format($top['total']) }}</b>
-          <span class="topkat-donut-pct">{{ $topShare }}%</span>
-          <small>{{ $top['sektor'] }}</small>
+          <b>{{ number_format($panelTotal) }}</b>
+          <span class="topkat-donut-pct">{{ $panelShare }}%</span>
+          <small>dari {{ number_format($grandTotal) }} POI</small>
         </div>
       </div>
 

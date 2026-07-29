@@ -163,8 +163,14 @@
        be squeezed into a 3-up row alongside Hasil Kunjungan Sales, which left
        no room for the donut + per-kategori sub-bars. --}}
   <div class="topkat-grid">
-    @include('partials.top-kategori', ['items' => $sektor['bni'], 'variant' => 'bni', 'chartId' => 'topkatBni'])
-    @include('partials.top-kategori', ['items' => $sektor['non'], 'variant' => 'non', 'chartId' => 'topkatNon'])
+    @include('partials.top-kategori', [
+      'items' => $sektor['bni'], 'variant' => 'bni', 'chartId' => 'topkatBni',
+      'panelTotal' => $sektor['total_bni'], 'panelShare' => $sektor['persen_bni'], 'grandTotal' => $sektor['grand_total'],
+    ])
+    @include('partials.top-kategori', [
+      'items' => $sektor['non'], 'variant' => 'non', 'chartId' => 'topkatNon',
+      'panelTotal' => $sektor['total_non'], 'panelShare' => $sektor['persen_non'], 'grandTotal' => $sektor['grand_total'],
+    ])
   </div>
 
   <div class="grid-1">

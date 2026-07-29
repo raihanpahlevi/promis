@@ -336,9 +336,26 @@ class DashboardController extends Controller
     }
 
     /**
-     * Top 5 sektor ranked by BNI count (both the BNI and Non-BNI panels show
-     * this SAME ranking — v1 quirk, preserved). Top 3 sub_sektor per sektor,
-     * same ranking rule.
+     * Feeds the two "Top Kategori" panels. Each side is ranked by ITS OWN
+     * count — top 5 sektor, and within each, top 3 sub_sektor.
+     *
+     * Until 2026-07-29 both panels reused a single ranking taken from the BNI
+     * counts (a v1 quirk that had been preserved deliberately). That made the
+     * Non-BNI panel wrong rather than merely oddly ordered: with production
+     * data it listed Education first when Food & Beverage was more than twice
+     * its size, and showed UNIVERSITY (890) as a top-3 sub of Education while
+     * PRESCHOOL (933) — genuinely bigger on that side — never appeared at all.
+     * The donut's dark-to-light ramp follows list order, so it disagreed with
+     * the slice sizes too.
+     *
+     * Sub rows are fetched once per sektor and sorted twice rather than
+     * queried per side: the two lists overlap heavily (usually the same five
+     * sektor in a different order), so this stays at roughly the previous
+     * query count instead of doubling it.
+     *
+     * Also returns each side's grand total across ALL sektor (not just the
+     * five plotted) — the donut centre reports the BNI/Non-BNI split of the
+     * whole POI population.
      */
     private function sektorBreakdown(array $kantorIds): array
     {
@@ -350,68 +367,69 @@ class DashboardController extends Controller
             ->selectRaw('SUM(CASE WHEN status_mitra IN (?, ?) THEN 1 ELSE 0 END) as bni', self::BNI_STATUSES)
             ->selectRaw('COUNT(*) as total')
             ->groupBy('sektor')
-            ->orderByDesc('bni')
-            ->limit(5)
-            ->get();
+            ->get()
+            ->map(fn ($row) => [
+                'sektor' => $row->sektor,
+                'bni' => (int) $row->bni,
+                'non' => (int) $row->total - (int) $row->bni,
+                'total' => (int) $row->total,
+            ]);
 
-        $bniList = [];
-        $nonList = [];
+        $totalBni = $sektorRows->sum('bni');
+        $totalNon = $sektorRows->sum('non');
 
-        foreach ($sektorRows as $row) {
-            $bniCount = (int) $row->bni;
-            $totalSektor = (int) $row->total;
-            $nonCount = $totalSektor - $bniCount;
+        $topBni = $sektorRows->sortByDesc('bni')->take(5)->values();
+        $topNon = $sektorRows->sortByDesc('non')->take(5)->values();
 
-            $subRows = Poi::query()
+        $subsBySektor = [];
+        foreach ($topBni->pluck('sektor')->merge($topNon->pluck('sektor'))->unique() as $sektor) {
+            $subsBySektor[$sektor] = Poi::query()
                 ->whereIn('kantor_id', $kantorIds)
                 ->where('status', 'aktif')
-                ->where('sektor', $row->sektor)
+                ->where('sektor', $sektor)
                 ->whereNotNull('sub_sektor')
                 ->where('sub_sektor', '!=', '')
                 ->select('sub_sektor')
                 ->selectRaw('SUM(CASE WHEN status_mitra IN (?, ?) THEN 1 ELSE 0 END) as bni', self::BNI_STATUSES)
                 ->selectRaw('COUNT(*) as total')
                 ->groupBy('sub_sektor')
-                ->orderByDesc('bni')
-                ->orderByDesc('total')
-                ->limit(3)
-                ->get();
-
-            $bniSubs = [];
-            $nonSubs = [];
-
-            foreach ($subRows as $sub) {
-                $subBni = (int) $sub->bni;
-                $subTotal = (int) $sub->total;
-                $subNon = $subTotal - $subBni;
-
-                $bniSubs[] = [
-                    'sub_sektor' => $sub->sub_sektor,
-                    'total' => $subBni,
-                    'persen' => $subTotal ? round($subBni / $subTotal * 100, 2) : 0,
-                ];
-                $nonSubs[] = [
-                    'sub_sektor' => $sub->sub_sektor,
-                    'total' => $subNon,
-                    'persen' => $subTotal ? round($subNon / $subTotal * 100, 2) : 0,
-                ];
-            }
-
-            $bniList[] = [
-                'sektor' => $row->sektor,
-                'total' => $bniCount,
-                'persen' => $totalSektor ? round($bniCount / $totalSektor * 100, 2) : 0,
-                'subs' => $bniSubs,
-            ];
-            $nonList[] = [
-                'sektor' => $row->sektor,
-                'total' => $nonCount,
-                'persen' => $totalSektor ? round($nonCount / $totalSektor * 100, 2) : 0,
-                'subs' => $nonSubs,
-            ];
+                ->get()
+                ->map(fn ($row) => [
+                    'sub_sektor' => $row->sub_sektor,
+                    'bni' => (int) $row->bni,
+                    'non' => (int) $row->total - (int) $row->bni,
+                    'total' => (int) $row->total,
+                ]);
         }
 
-        return ['bni' => $bniList, 'non' => $nonList];
+        $build = fn ($rows, string $side) => $rows->map(fn ($row) => [
+            'sektor' => $row['sektor'],
+            'total' => $row[$side],
+            // Share of THIS sektor that is BNI (or not) — unchanged meaning.
+            'persen' => $row['total'] ? round($row[$side] / $row['total'] * 100, 2) : 0,
+            'subs' => collect($subsBySektor[$row['sektor']] ?? [])
+                ->sortByDesc($side)
+                ->take(3)
+                ->map(fn ($sub) => [
+                    'sub_sektor' => $sub['sub_sektor'],
+                    'total' => $sub[$side],
+                    'persen' => $sub['total'] ? round($sub[$side] / $sub['total'] * 100, 2) : 0,
+                ])
+                ->values()
+                ->all(),
+        ])->all();
+
+        $grandTotal = $totalBni + $totalNon;
+
+        return [
+            'bni' => $build($topBni, 'bni'),
+            'non' => $build($topNon, 'non'),
+            'total_bni' => $totalBni,
+            'total_non' => $totalNon,
+            'persen_bni' => $grandTotal ? round($totalBni / $grandTotal * 100, 1) : 0,
+            'persen_non' => $grandTotal ? round($totalNon / $grandTotal * 100, 1) : 0,
+            'grand_total' => $grandTotal,
+        ];
     }
 
     /**
