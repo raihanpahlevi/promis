@@ -36,7 +36,7 @@
     @if (session('import_summary'))
       @php($summary = session('import_summary'))
       <div style="margin-top:28px">
-        <div class="stat-grid" style="grid-template-columns:repeat(2,1fr)">
+        <div class="stat-grid stat-grid-2">
           <div class="stat-card accent-ok">
             <span class="kicker"><i class="bi bi-check2-circle"></i> Berhasil diimport</span>
             <div class="num" style="margin-top:8px">{{ $summary['imported'] }}</div>

@@ -152,6 +152,7 @@ body{
    columns. This class sits before those @media blocks in source order, so
    they still override it at narrower widths as intended. */
 .stat-grid-3{grid-template-columns:repeat(3,1fr)}
+.stat-grid-2{grid-template-columns:repeat(2,1fr)}
 .stat-card{
   background:#fff;border:1px solid var(--brand-100);border-radius:16px;padding:18px 20px;
   display:flex;flex-direction:column;gap:10px;
@@ -701,7 +702,7 @@ tbody tr{transition:background-color 150ms ease}
 .topkat-donut-center small{font-size:10.5px;color:#8A6B55;margin-top:3px;line-height:1.25}
 
 .topkat-legend{list-style:none;margin:0;padding:0;flex:1;min-width:210px;display:flex;flex-direction:column;gap:9px}
-.topkat-legend li{display:flex;align-items:center;gap:9px;font-size:12.5px}
+.topkat-legend li{display:flex;align-items:center;gap:9px;font-size:12.5px;min-width:0}
 .topkat-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 .topkat-legend-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .topkat-legend-val{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -711,12 +712,15 @@ tbody tr{transition:background-color 150ms ease}
 
 .topkat-cards{display:flex;flex-direction:column;gap:10px;margin-top:16px}
 .topkat-card{
-  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
   border:1px solid var(--brand-100);border-radius:14px;padding:12px 14px;background:#fff;
 }
 .topkat-bni .topkat-card{background:linear-gradient(140deg,rgba(46,125,50,.045),#fff 55%)}
 .topkat-non .topkat-card{background:linear-gradient(140deg,var(--brand-50),#fff 55%)}
-.topkat-cat{display:flex;align-items:center;gap:11px;width:190px;flex-shrink:0}
+/* Narrow on purpose — the kategori name wraps to two lines here (as in the
+   approved design) and the width it gives up goes to the sub-kategori labels,
+   which otherwise ellipsised at ~1440px. */
+.topkat-cat{display:flex;align-items:center;gap:10px;width:158px;flex-shrink:0}
 .topkat-icon{
   width:38px;height:38px;border-radius:50%;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;
@@ -731,17 +735,24 @@ tbody tr{transition:background-color 150ms ease}
 .topkat-cat-txt b{display:block;font-size:13px;font-weight:700}
 .topkat-cat-txt small{font-size:11.5px;color:#8A6B55;font-variant-numeric:tabular-nums}
 
-.topkat-subs{flex:1;min-width:230px;display:flex;flex-direction:column;gap:7px;border-left:1px solid var(--brand-100);padding-left:16px}
-.topkat-sub{display:flex;align-items:center;gap:10px;font-size:11px}
-/* Wide enough for the real long ones ("LOCAL GOVERNMENT OFFICE",
-   "CONVENIENCE STORE") — at 120px they all ellipsised into "…". */
+.topkat-subs{flex:1;min-width:200px;display:flex;flex-direction:column;gap:7px;border-left:1px solid var(--brand-100);padding-left:12px;overflow:hidden}
+/* Grid, not flex, and every track allowed to shrink: with fixed-width
+   label/value tracks the row's minimum exceeded the card at ~1440px and the
+   values spilled out past the card border. Identical template on every row
+   keeps the three columns aligned; the label ellipsises when space runs
+   short, and the value column sizes to its own longest content so figures
+   like "2,275 (96.6%)" always fit. */
+.topkat-sub{
+  display:grid;grid-template-columns:minmax(0,1.7fr) minmax(18px,.5fr) auto;
+  gap:8px;align-items:center;font-size:11px;
+}
 .topkat-sub-lbl{
-  width:158px;flex-shrink:0;text-transform:uppercase;letter-spacing:.2px;color:var(--brand-700);
+  min-width:0;text-transform:uppercase;letter-spacing:.2px;color:var(--brand-700);
   font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;
 }
-.topkat-bar{flex:1;min-width:32px;height:6px;border-radius:999px;background:var(--brand-50);overflow:hidden}
+.topkat-bar{height:6px;border-radius:999px;background:var(--brand-50);overflow:hidden}
 .topkat-bar i{display:block;height:100%;border-radius:999px;transition:width 500ms cubic-bezier(.22,1,.36,1)}
-.topkat-sub-val{width:96px;flex-shrink:0;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.topkat-sub-val{white-space:nowrap;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
 .topkat-sub-val em{font-style:normal;font-weight:500;color:#8A6B55}
 .topkat-sub-empty{color:#8A6B55;font-style:italic;text-transform:none}
 
@@ -751,8 +762,9 @@ tbody tr{transition:background-color 150ms ease}
 }
 @media (max-width:640px){
   .topkat-overview{justify-content:center}
-  .topkat-sub-lbl{width:88px}
-  .topkat-sub-val{width:82px}
+  /* Bar track is the first thing worth sacrificing on a phone — the label
+     and the figure both have to stay readable. */
+  .topkat-sub{grid-template-columns:minmax(0,1.5fr) minmax(14px,.6fr) auto}
 }
 
 /* ---- Respect the OS-level motion preference: near-zero-duration instead

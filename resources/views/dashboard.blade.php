@@ -75,7 +75,10 @@
     </div>
   @endif
 
-  <div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">
+  {{-- .stat-grid-3, not an inline grid-template-columns: inline styles outrank
+       the @media rules in app.css, so the inline version stayed 3-up on a
+       phone and pushed the page into horizontal scroll. --}}
+  <div class="stat-grid stat-grid-3">
     <div class="stat-card hero">
       <span class="kicker">Total POI &mdash; {{ $kantorLabel }}</span>
       <div class="num" style="font-size:32px;margin-top:8px">{{ number_format($totals['total_poi']) }}</div>
