@@ -711,9 +711,7 @@ tbody tr{transition:background-color 150ms ease}
 .topkat-legend-val{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
 .topkat-legend-val em{font-style:normal;font-weight:500;color:#8A6B55}
 
-.topkat-note{font-size:11px;color:#8A6B55;margin:14px 0 0;text-align:center}
-
-.topkat-cards{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+.topkat-cards{display:flex;flex-direction:column;gap:10px;margin-top:18px}
 .topkat-card{
   display:flex;align-items:center;gap:12px;flex-wrap:wrap;
   border:1px solid var(--brand-100);border-radius:14px;padding:12px 14px;background:#fff;
@@ -745,13 +743,21 @@ tbody tr{transition:background-color 150ms ease}
    keeps the three columns aligned; the label ellipsises when space runs
    short, and the value column sizes to its own longest content so figures
    like "2,275 (96.6%)" always fit. */
+/* The figure track is a FIXED width, not `auto`: with `auto` every row sized
+   that column to its own text ("17 (3.97%)" vs "411 (96.03%)"), which shifted
+   the two fr tracks and left the bars starting at a different x on each row —
+   and at a different x again in the other panel. Fixed here means every row in
+   every card of both panels resolves to identical tracks, so the bars line up.
+   100px clears the widest figure production can produce ("29,212 (98.03%)"). */
 .topkat-sub{
-  display:grid;grid-template-columns:minmax(0,1.7fr) minmax(18px,.5fr) auto;
+  display:grid;grid-template-columns:minmax(0,1.6fr) minmax(18px,.63fr) 92px;
   gap:8px;align-items:center;font-size:11px;
 }
+/* 9.5px with no extra tracking is what makes the longest real sub kategori
+   ("LOCAL GOVERNMENT OFFICE") fit without stealing width from the bar. */
 .topkat-sub-lbl{
-  min-width:0;text-transform:uppercase;letter-spacing:.2px;color:var(--brand-700);
-  font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;
+  min-width:0;text-transform:uppercase;color:var(--brand-700);
+  font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9.5px;
 }
 .topkat-bar{height:6px;border-radius:999px;background:var(--brand-50);overflow:hidden}
 .topkat-bar i{display:block;height:100%;border-radius:999px;transition:width 500ms cubic-bezier(.22,1,.36,1)}
@@ -767,7 +773,7 @@ tbody tr{transition:background-color 150ms ease}
   .topkat-overview{justify-content:center}
   /* Bar track is the first thing worth sacrificing on a phone — the label
      and the figure both have to stay readable. */
-  .topkat-sub{grid-template-columns:minmax(0,1.5fr) minmax(14px,.6fr) auto}
+  .topkat-sub{grid-template-columns:minmax(0,1.5fr) minmax(14px,.6fr) 92px}
 }
 
 /* ---- Respect the OS-level motion preference: near-zero-duration instead

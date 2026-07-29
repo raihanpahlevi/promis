@@ -97,11 +97,6 @@
       </ul>
     </div>
 
-    <p class="topkat-note">
-      Tengah: kategori teratas &amp; porsinya dari 5 kategori &middot;
-      Daftar: porsi {{ $isBni ? 'BNI' : 'Non BNI' }} di dalam tiap kategori
-    </p>
-
     <div class="topkat-cards">
       @foreach ($items as $i => $item)
         <div class="topkat-card">
