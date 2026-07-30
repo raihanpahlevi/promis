@@ -24,7 +24,10 @@
           <small>Coba lebarkan filter Area/Cluster/Cabang di atas.</small>
         </div>
       @else
-        <div style="overflow-x:auto">
+        {{-- Scrolls on both axes so the sticky header has something to
+             stick to; with overflow-x only, the wrapper never scrolled
+             vertically and position:sticky was a no-op. --}}
+        <div class="table-summary-scroll">
           <table class="table-ledger table-summary">
             <thead>
               <tr>

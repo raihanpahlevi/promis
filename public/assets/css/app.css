@@ -670,8 +670,15 @@ tbody tr{transition:background-color 150ms ease}
    carry three nesting levels (Area > Cabang-Cluster > Cabang) plus a grand
    total, so the level has to read from the row styling alone.
    ========================================================================= */
+/* Both axes scroll here so the sticky header below has a scroll container to
+   stick within — an overflow-x-only wrapper never scrolls vertically, which
+   made position:sticky do nothing. Capped rather than page-length because
+   these tables run to 130+ rows. */
+.table-summary-scroll{overflow:auto;max-height:72vh}
 .table-summary{white-space:nowrap}
-.table-summary thead th{position:sticky;top:0;z-index:1}
+.table-summary thead th{position:sticky;top:0;z-index:2;background:var(--brand-50)}
+/* Second header row sits below the first, not at the container top. */
+.table-summary thead tr:nth-child(2) th{top:33px}
 .table-summary th.num,.table-summary td.num{text-align:right}
 .table-summary td.cell-heading{white-space:nowrap}
 

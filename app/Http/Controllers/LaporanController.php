@@ -461,18 +461,27 @@ class LaporanController extends Controller
             ->groupBy('kantor_id')
             ->pluck('n', 'kantor_id');
 
-        $salesPerKantor = DB::table('user_kantor')
-            ->join('users', 'users.id', '=', 'user_kantor.user_id')
-            ->whereIn('user_kantor.kantor_id', $kantorIds)
-            ->whereIn('users.role', self::RELEVANT_ROLES)
-            ->where('users.is_active', true)
-            ->selectRaw('user_kantor.kantor_id, COUNT(DISTINCT users.id) as n')
-            ->groupBy('user_kantor.kantor_id')
-            ->pluck('n', 'kantor_id');
+        // Same population Rekap Sales counts (relevantUserQuery: sales/
+        // admin_final, with an active unit) so the two tabs can't disagree on
+        // one Cabang's headcount. Kept as raw ids, not per-kantor counts: one
+        // sales can hold several Cabang, so the Area/Cluster/grand rows have
+        // to union the ids rather than add the counts up — see
+        // buildKantorHierarchy()'s $distinctSets.
+        $salesIdsPerKantor = DB::table('user_kantor')
+            ->whereIn('kantor_id', $kantorIds)
+            ->whereIn('user_id', $this->relevantUserQuery(null)->where('is_active', true)->pluck('id'))
+            ->get(['kantor_id', 'user_id'])
+            ->groupBy('kantor_id')
+            ->map(fn ($rows) => $rows->pluck('user_id')->all())
+            ->all();
 
         $hasilPerKantor = Kunjungan::query()
             ->join('poi', 'poi.id', '=', 'kunjungan.poi_id')
             ->whereIn('poi.kantor_id', $kantorIds)
+            // Matches the Jumlah POI column beside it — without this a Cabang
+            // could report visits against POI the same row says don't exist,
+            // pushing %-Tase Closing past 100%.
+            ->where('poi.status', 'aktif')
             ->whereBetween('kunjungan.tanggal_kunjungan', [$dari, $sampai])
             ->selectRaw('poi.kantor_id, kunjungan.hasil, COUNT(*) as n')
             ->groupBy('poi.kantor_id', 'kunjungan.hasil')
@@ -480,8 +489,7 @@ class LaporanController extends Controller
 
         $metrics = [];
         foreach ($kantorList as $kantor) {
-            $row = ['jumlah_sales' => (int) ($salesPerKantor[$kantor->id] ?? 0),
-                    'jumlah_poi' => (int) ($poiPerKantor[$kantor->id] ?? 0)];
+            $row = ['jumlah_poi' => (int) ($poiPerKantor[$kantor->id] ?? 0)];
             foreach (self::FUNNEL_STAGES as $stage) {
                 $row[$stage] = 0;
             }
@@ -493,8 +501,13 @@ class LaporanController extends Controller
             }
         }
 
-        $columns = array_merge(['jumlah_sales', 'jumlah_poi'], self::FUNNEL_STAGES);
-        $rows = $this->buildKantorHierarchy($kantorList, $metrics, $columns);
+        $columns = array_merge(['jumlah_poi'], self::FUNNEL_STAGES);
+        $rows = $this->buildKantorHierarchy(
+            $kantorList,
+            $metrics,
+            $columns,
+            ['jumlah_sales' => $salesIdsPerKantor],
+        );
 
         return view('laporan.summary-kunjungan', [
             'rows' => $rows,
@@ -519,6 +532,7 @@ class LaporanController extends Controller
             ->join('kunjungan', 'kunjungan.id', '=', 'kunjungan_produk.kunjungan_id')
             ->join('poi', 'poi.id', '=', 'kunjungan.poi_id')
             ->whereIn('poi.kantor_id', $kantorIds)
+            ->where('poi.status', 'aktif') // same basis as Summary Kunjungan
             ->where('kunjungan.hasil', Kunjungan::HASIL_CLOSING)
             ->whereBetween('kunjungan.tanggal_kunjungan', [$dari, $sampai])
             ->selectRaw('poi.kantor_id, kunjungan_produk.produk, COUNT(*) as n')
@@ -548,12 +562,23 @@ class LaporanController extends Controller
     }
 
     /**
+     * Validated so a hand-edited or stale URL can't 500 the page: the raw
+     * value reaches Carbon::parse() in the period badge (?dari=abc threw
+     * "Could not parse") and htmlspecialchars() in the filter input
+     * (?dari[]=... threw on an array). The SQL itself was never at risk —
+     * these are bound parameters — but the render was.
+     *
      * @return array{0: string, 1: string}
      */
     private function summaryPeriode(Request $request): array
     {
-        $dari = $request->filled('dari') ? $request->input('dari') : Carbon::today()->startOfMonth()->toDateString();
-        $sampai = $request->filled('sampai') ? $request->input('sampai') : Carbon::today()->toDateString();
+        $valid = $request->validate([
+            'dari' => ['nullable', 'date_format:Y-m-d'],
+            'sampai' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+
+        $dari = $valid['dari'] ?? Carbon::today()->startOfMonth()->toDateString();
+        $sampai = $valid['sampai'] ?? Carbon::today()->toDateString();
 
         return [$dari, $sampai];
     }
@@ -581,12 +606,24 @@ class LaporanController extends Controller
      * than silently dropped — otherwise their numbers would vanish from a
      * report whose grand total is supposed to reconcile.
      *
+     * $distinctSets holds columns that must NOT be added up the tree because
+     * the thing being counted can belong to more than one Cabang — currently
+     * just Jumlah Sales, since a sales can hold several Cabang and adding the
+     * per-Cabang counts reported one person twice in the Cluster, Area and
+     * grand-total rows. Each entry maps kantor id => list of member ids; every
+     * level unions the ids it covers and counts the union instead.
+     *
      * @param  array<int, array<string, int>>  $metrics  keyed by kantor id
-     * @param  array<int, string>  $columns
+     * @param  array<int, string>  $columns  additive columns
+     * @param  array<string, array<int, array<int, mixed>>>  $distinctSets  column => kantor id => member ids
      * @return array<int, array{level: string, label: string, values: array<string, int>}>
      */
-    private function buildKantorHierarchy(Collection $kantorList, array $metrics, array $columns): array
-    {
+    private function buildKantorHierarchy(
+        Collection $kantorList,
+        array $metrics,
+        array $columns,
+        array $distinctSets = [],
+    ): array {
         $zero = array_fill_keys($columns, 0);
         $sum = function (array $a, array $b) use ($columns) {
             foreach ($columns as $c) {
@@ -596,36 +633,71 @@ class LaporanController extends Controller
             return $a;
         };
 
+        // Collects the member ids seen under a group, then folds their counts
+        // into that group's row once the group is complete.
+        $emptySets = array_fill_keys(array_keys($distinctSets), []);
+        $mergeSets = function (array $acc, int $kantorId) use ($distinctSets) {
+            foreach ($distinctSets as $column => $byKantor) {
+                foreach ($byKantor[$kantorId] ?? [] as $memberId) {
+                    $acc[$column][$memberId] = true;
+                }
+            }
+
+            return $acc;
+        };
+        $withCounts = function (array $values, array $acc) use ($distinctSets) {
+            foreach (array_keys($distinctSets) as $column) {
+                $values[$column] = count($acc[$column] ?? []);
+            }
+
+            return $values;
+        };
+
         $grouped = $kantorList
             ->sortBy(fn ($k) => [$k->area ?? '', $k->cabang_cluster ?? '', $k->nama])
             ->groupBy(fn ($k) => $k->area ?: 'Tanpa Area');
 
         $rows = [];
         $grand = $zero;
+        $grandSets = $emptySets;
 
         foreach ($grouped as $area => $kantorInArea) {
             $areaTotal = $zero;
+            $areaSets = $emptySets;
             $clusterBlocks = [];
 
             foreach ($kantorInArea->groupBy(fn ($k) => $k->cabang_cluster ?: 'Tanpa Cluster') as $cluster => $kantorInCluster) {
                 $clusterTotal = $zero;
+                $clusterSets = $emptySets;
                 $cabangRows = [];
 
                 foreach ($kantorInCluster as $kantor) {
                     $values = ($metrics[$kantor->id] ?? []) + $zero;
                     $clusterTotal = $sum($clusterTotal, $values);
-                    $cabangRows[] = ['level' => 'cabang', 'label' => $kantor->nama, 'values' => $values];
+                    $clusterSets = $mergeSets($clusterSets, $kantor->id);
+                    $areaSets = $mergeSets($areaSets, $kantor->id);
+                    $grandSets = $mergeSets($grandSets, $kantor->id);
+
+                    $cabangRows[] = [
+                        'level' => 'cabang',
+                        'label' => $kantor->nama,
+                        'values' => $withCounts($values, $mergeSets($emptySets, $kantor->id)),
+                    ];
                 }
 
                 $areaTotal = $sum($areaTotal, $clusterTotal);
                 $clusterBlocks[] = array_merge(
-                    [['level' => 'cluster', 'label' => $cluster, 'values' => $clusterTotal]],
+                    [[
+                        'level' => 'cluster',
+                        'label' => $cluster,
+                        'values' => $withCounts($clusterTotal, $clusterSets),
+                    ]],
                     $cabangRows,
                 );
             }
 
             $grand = $sum($grand, $areaTotal);
-            $rows[] = ['level' => 'area', 'label' => $area, 'values' => $areaTotal];
+            $rows[] = ['level' => 'area', 'label' => $area, 'values' => $withCounts($areaTotal, $areaSets)];
             foreach ($clusterBlocks as $block) {
                 foreach ($block as $row) {
                     $rows[] = $row;
@@ -633,7 +705,7 @@ class LaporanController extends Controller
             }
         }
 
-        $rows[] = ['level' => 'total', 'label' => 'TOTAL', 'values' => $grand];
+        $rows[] = ['level' => 'total', 'label' => 'TOTAL', 'values' => $withCounts($grand, $grandSets)];
 
         return $rows;
     }
