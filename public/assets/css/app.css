@@ -666,6 +666,37 @@ tbody tr{transition:background-color 150ms ease}
 .content.is-submitting{opacity:.6}
 
 /* =========================================================================
+   Summary Kunjungan / Summary Produk (2026-07-29) — one wide table whose rows
+   carry three nesting levels (Area > Cabang-Cluster > Cabang) plus a grand
+   total, so the level has to read from the row styling alone.
+   ========================================================================= */
+.table-summary{white-space:nowrap}
+.table-summary thead th{position:sticky;top:0;z-index:1}
+.table-summary th.num,.table-summary td.num{text-align:right}
+.table-summary td.cell-heading{white-space:nowrap}
+
+.table-summary tbody tr.row-area{background:var(--brand-100);font-weight:800}
+.table-summary tbody tr.row-area:hover{background:var(--brand-100)}
+.table-summary tbody tr.row-area td.cell-heading{color:var(--brand-900);text-transform:uppercase;letter-spacing:.3px}
+
+.table-summary tbody tr.row-cluster{background:var(--brand-50);font-weight:700}
+.table-summary tbody tr.row-cluster:hover{background:var(--brand-50)}
+.table-summary tbody tr.row-cluster td.cell-heading{padding-left:22px;color:var(--brand-700)}
+
+.table-summary tbody tr.row-cabang td.cell-heading{padding-left:40px;font-weight:500}
+
+.table-summary tbody tr.row-total{background:var(--brand-700);color:#fff;font-weight:800}
+.table-summary tbody tr.row-total:hover{background:var(--brand-700)}
+.table-summary tbody tr.row-total td{border-bottom:none}
+
+@media (max-width:640px){
+  /* Deliberately NOT card-stacked: the value only means anything next to its
+     siblings, so the table keeps its shape and scrolls sideways instead. */
+  .table-summary tbody tr.row-cluster td.cell-heading{padding-left:14px}
+  .table-summary tbody tr.row-cabang td.cell-heading{padding-left:26px}
+}
+
+/* =========================================================================
    Dashboard "Top Kategori" panels (2026-07-29) — donut + legend on top, one
    card per kategori below with its top sub-kategori as labelled bars.
    Palette comes from the panel's own inline colors (green ramp for BNI,

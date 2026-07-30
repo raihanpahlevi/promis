@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Kantor;
 use App\Models\Kunjungan;
+use App\Models\Poi;
 use App\Models\Unit;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
@@ -44,6 +46,20 @@ use Illuminate\View\View;
 class LaporanController extends Controller
 {
     private const RELEVANT_ROLES = [User::ROLE_SALES, User::ROLE_ADMIN_FINAL];
+
+    /**
+     * Funnel stages as they appear across the Summary Kunjungan table, left to
+     * right. Closing is deliberately last: the source spreadsheet kept it in a
+     * column of its own beside the running total, and the report mirrors that.
+     */
+    private const FUNNEL_STAGES = [
+        Kunjungan::HASIL_BELUM_BERTEMU,
+        Kunjungan::HASIL_BELUM_BERMINAT,
+        Kunjungan::HASIL_BERMINAT,
+        Kunjungan::HASIL_NEGO_PRICING,
+        Kunjungan::HASIL_COLLECTING_DOKUMEN,
+        Kunjungan::HASIL_CLOSING,
+    ];
 
     public function rekapSales(Request $request): View
     {
@@ -406,5 +422,219 @@ class LaporanController extends Controller
                 'total_kantor' => $kantorList->count(),
             ],
         ];
+    }
+
+    // =====================================================================
+    // Summary Kunjungan & Summary Produk (2026-07-29)
+    //
+    // Both mirror the two sheets of the "menu tambahan" workbook: one row per
+    // Cabang, grouped under its Cabang-Cluster and then its Area, with a
+    // subtotal on every group and a grand total at the bottom.
+    //
+    // Deviations from the spreadsheet, agreed before building:
+    //  - "Total Kunjungan" counts Closing too. The sheet's =SUM(D:H) stopped
+    //    short of the Closing column, which would report 0 visits for a
+    //    Cabang whose visits all closed.
+    //  - "%-Tase Closing" keeps the sheet's own basis: Closing / Jumlah POI
+    //    (penetration of the POI base), NOT Closing / visits.
+    //  - Summary Produk counts products from Closing visits only, matching the
+    //    sheet's "Produk Closing" heading and the dashboard's produk panel.
+    // Jumlah POI and Jumlah Sales are current stock and deliberately ignore
+    // the date filter; only the visit-derived columns move with it.
+    // =====================================================================
+
+    public function summaryKunjungan(Request $request): View
+    {
+        $user = $request->user();
+        $kantorScope = $this->resolveKantorScope($user, $request);
+        [$dari, $sampai] = $this->summaryPeriode($request);
+
+        $kantorList = $kantorScope['kantorOptions']
+            ->whereIn('id', $kantorScope['kantorIds'])
+            ->values();
+        $kantorIds = $kantorList->pluck('id')->all();
+
+        $poiPerKantor = Poi::query()
+            ->whereIn('kantor_id', $kantorIds)
+            ->where('status', 'aktif')
+            ->selectRaw('kantor_id, COUNT(*) as n')
+            ->groupBy('kantor_id')
+            ->pluck('n', 'kantor_id');
+
+        $salesPerKantor = DB::table('user_kantor')
+            ->join('users', 'users.id', '=', 'user_kantor.user_id')
+            ->whereIn('user_kantor.kantor_id', $kantorIds)
+            ->whereIn('users.role', self::RELEVANT_ROLES)
+            ->where('users.is_active', true)
+            ->selectRaw('user_kantor.kantor_id, COUNT(DISTINCT users.id) as n')
+            ->groupBy('user_kantor.kantor_id')
+            ->pluck('n', 'kantor_id');
+
+        $hasilPerKantor = Kunjungan::query()
+            ->join('poi', 'poi.id', '=', 'kunjungan.poi_id')
+            ->whereIn('poi.kantor_id', $kantorIds)
+            ->whereBetween('kunjungan.tanggal_kunjungan', [$dari, $sampai])
+            ->selectRaw('poi.kantor_id, kunjungan.hasil, COUNT(*) as n')
+            ->groupBy('poi.kantor_id', 'kunjungan.hasil')
+            ->get();
+
+        $metrics = [];
+        foreach ($kantorList as $kantor) {
+            $row = ['jumlah_sales' => (int) ($salesPerKantor[$kantor->id] ?? 0),
+                    'jumlah_poi' => (int) ($poiPerKantor[$kantor->id] ?? 0)];
+            foreach (self::FUNNEL_STAGES as $stage) {
+                $row[$stage] = 0;
+            }
+            $metrics[$kantor->id] = $row;
+        }
+        foreach ($hasilPerKantor as $r) {
+            if (isset($metrics[$r->kantor_id]) && array_key_exists($r->hasil, $metrics[$r->kantor_id])) {
+                $metrics[$r->kantor_id][$r->hasil] = (int) $r->n;
+            }
+        }
+
+        $columns = array_merge(['jumlah_sales', 'jumlah_poi'], self::FUNNEL_STAGES);
+        $rows = $this->buildKantorHierarchy($kantorList, $metrics, $columns);
+
+        return view('laporan.summary-kunjungan', [
+            'rows' => $rows,
+            'stages' => self::FUNNEL_STAGES,
+            'dari' => $dari,
+            'sampai' => $sampai,
+        ] + $this->summaryFilterViewData($kantorScope));
+    }
+
+    public function summaryProduk(Request $request): View
+    {
+        $user = $request->user();
+        $kantorScope = $this->resolveKantorScope($user, $request);
+        [$dari, $sampai] = $this->summaryPeriode($request);
+
+        $kantorList = $kantorScope['kantorOptions']
+            ->whereIn('id', $kantorScope['kantorIds'])
+            ->values();
+        $kantorIds = $kantorList->pluck('id')->all();
+
+        $produkRows = DB::table('kunjungan_produk')
+            ->join('kunjungan', 'kunjungan.id', '=', 'kunjungan_produk.kunjungan_id')
+            ->join('poi', 'poi.id', '=', 'kunjungan.poi_id')
+            ->whereIn('poi.kantor_id', $kantorIds)
+            ->where('kunjungan.hasil', Kunjungan::HASIL_CLOSING)
+            ->whereBetween('kunjungan.tanggal_kunjungan', [$dari, $sampai])
+            ->selectRaw('poi.kantor_id, kunjungan_produk.produk, COUNT(*) as n')
+            ->groupBy('poi.kantor_id', 'kunjungan_produk.produk')
+            ->get();
+
+        $produkList = Kunjungan::PRODUK_OPTIONS;
+
+        $metrics = [];
+        foreach ($kantorList as $kantor) {
+            $metrics[$kantor->id] = array_fill_keys($produkList, 0);
+        }
+        foreach ($produkRows as $r) {
+            if (isset($metrics[$r->kantor_id]) && array_key_exists($r->produk, $metrics[$r->kantor_id])) {
+                $metrics[$r->kantor_id][$r->produk] = (int) $r->n;
+            }
+        }
+
+        $rows = $this->buildKantorHierarchy($kantorList, $metrics, $produkList);
+
+        return view('laporan.summary-produk', [
+            'rows' => $rows,
+            'produkList' => $produkList,
+            'dari' => $dari,
+            'sampai' => $sampai,
+        ] + $this->summaryFilterViewData($kantorScope));
+    }
+
+    /**
+     * @return array{0: string, 1: string}
+     */
+    private function summaryPeriode(Request $request): array
+    {
+        $dari = $request->filled('dari') ? $request->input('dari') : Carbon::today()->startOfMonth()->toDateString();
+        $sampai = $request->filled('sampai') ? $request->input('sampai') : Carbon::today()->toDateString();
+
+        return [$dari, $sampai];
+    }
+
+    private function summaryFilterViewData(array $kantorScope): array
+    {
+        return [
+            'kantorOptions' => $kantorScope['kantorOptions'],
+            'selectedKantorIds' => $kantorScope['selectedKantorIds'],
+            'kantorAreaOptions' => $kantorScope['areaOptions'],
+            'selectedKantorArea' => $kantorScope['selectedArea'],
+            'kantorClusterOptions' => $kantorScope['clusterOptions'],
+            'selectedKantorClusters' => $kantorScope['selectedClusters'],
+        ];
+    }
+
+    /**
+     * Flattens Area > Cabang-Cluster > Cabang into the ordered row list the
+     * views render, injecting a subtotal row for every group plus a grand
+     * total, exactly like the source spreadsheet.
+     *
+     * Each returned row is ['level' => 'area'|'cluster'|'cabang'|'total',
+     * 'label' => string, 'values' => [column => int]]. Kantor with no
+     * area/cluster recorded are grouped under an explicit placeholder rather
+     * than silently dropped — otherwise their numbers would vanish from a
+     * report whose grand total is supposed to reconcile.
+     *
+     * @param  array<int, array<string, int>>  $metrics  keyed by kantor id
+     * @param  array<int, string>  $columns
+     * @return array<int, array{level: string, label: string, values: array<string, int>}>
+     */
+    private function buildKantorHierarchy(Collection $kantorList, array $metrics, array $columns): array
+    {
+        $zero = array_fill_keys($columns, 0);
+        $sum = function (array $a, array $b) use ($columns) {
+            foreach ($columns as $c) {
+                $a[$c] += $b[$c] ?? 0;
+            }
+
+            return $a;
+        };
+
+        $grouped = $kantorList
+            ->sortBy(fn ($k) => [$k->area ?? '', $k->cabang_cluster ?? '', $k->nama])
+            ->groupBy(fn ($k) => $k->area ?: 'Tanpa Area');
+
+        $rows = [];
+        $grand = $zero;
+
+        foreach ($grouped as $area => $kantorInArea) {
+            $areaTotal = $zero;
+            $clusterBlocks = [];
+
+            foreach ($kantorInArea->groupBy(fn ($k) => $k->cabang_cluster ?: 'Tanpa Cluster') as $cluster => $kantorInCluster) {
+                $clusterTotal = $zero;
+                $cabangRows = [];
+
+                foreach ($kantorInCluster as $kantor) {
+                    $values = ($metrics[$kantor->id] ?? []) + $zero;
+                    $clusterTotal = $sum($clusterTotal, $values);
+                    $cabangRows[] = ['level' => 'cabang', 'label' => $kantor->nama, 'values' => $values];
+                }
+
+                $areaTotal = $sum($areaTotal, $clusterTotal);
+                $clusterBlocks[] = array_merge(
+                    [['level' => 'cluster', 'label' => $cluster, 'values' => $clusterTotal]],
+                    $cabangRows,
+                );
+            }
+
+            $grand = $sum($grand, $areaTotal);
+            $rows[] = ['level' => 'area', 'label' => $area, 'values' => $areaTotal];
+            foreach ($clusterBlocks as $block) {
+                foreach ($block as $row) {
+                    $rows[] = $row;
+                }
+            }
+        }
+
+        $rows[] = ['level' => 'total', 'label' => 'TOTAL', 'values' => $grand];
+
+        return $rows;
     }
 }

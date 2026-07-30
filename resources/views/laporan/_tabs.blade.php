@@ -5,6 +5,8 @@
   $laporanTabs = [
     ['label' => 'Riwayat Kunjungan', 'route' => 'kunjungan.index'],
     ['label' => 'Rekap Sales', 'route' => 'laporan.rekap-sales'],
+    ['label' => 'Summary Kunjungan', 'route' => 'laporan.summary-kunjungan'],
+    ['label' => 'Summary Produk', 'route' => 'laporan.summary-produk'],
   ];
 @endphp
 <div class="section-tabs">
