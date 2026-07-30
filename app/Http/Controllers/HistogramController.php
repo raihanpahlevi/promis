@@ -31,7 +31,35 @@ class HistogramController extends Controller
 {
     use NarrowsKantorByAreaCluster;
 
-    private const PER_PAGE = 15;
+    /**
+     * The three produk histograms, in display order. Partitions
+     * Kunjungan::PRODUK_OPTIONS exactly — 3 + 6 + 9 = 18, nothing shared and
+     * nothing left out. Verified by HistogramTest; adding a produk to the model
+     * without placing it in a group fails that test rather than quietly
+     * dropping it off this page.
+     */
+    private const PRODUK_GRUP = [
+        'DPK' => ['Tabungan', 'Giro', 'Deposito'],
+        'LOAN' => ['Kredit SME', 'BWU', 'KUR', 'BNI Griya', 'BNI Fleksi', 'Kartu Kredit'],
+        'Transaksional & Lainnya' => [
+            'EDC', 'QRIS', 'BNI Direct', 'Trade Finance', 'Garansi Bank',
+            'AGEN46', 'Payroll', 'BIONS Sekuritas', 'Wondr by BNI',
+        ],
+    ];
+
+    /**
+     * Shorter axis labels — the stored names are what the client calls them in
+     * the source workbook, and the full ones ("BIONS Sekuritas") crowd the axis
+     * once nine bars share a row.
+     */
+    private const PRODUK_LABEL = [
+        'Kredit SME' => 'SME',
+        'BNI Griya' => 'Griya',
+        'BNI Fleksi' => 'Fleksi',
+        'AGEN46' => 'Agen46',
+        'BIONS Sekuritas' => 'Sekuritas',
+        'Wondr by BNI' => 'Wondr',
+    ];
 
     public function index(Request $request): View
     {
@@ -42,8 +70,7 @@ class HistogramController extends Controller
         $sampai = $request->filled('sampai') ? $request->input('sampai') : Carbon::now()->toDateString();
 
         $histogram = $this->histogram($scope['kantorIds'], $dari, $sampai);
-        $produk = $this->produkTotals($scope['kantorIds'], $dari, $sampai);
-        $detail = $this->detailAkuisisi($scope['kantorIds'], $dari, $sampai);
+        $produkGrup = $this->produkPerGrup($scope['kantorIds'], $dari, $sampai);
 
         return view('histogram.index', [
             'kantorOptions' => $scope['kantorOptions'],
@@ -56,10 +83,7 @@ class HistogramController extends Controller
             'dari' => $dari,
             'sampai' => $sampai,
             'histogram' => $histogram,
-            'produkAll' => $produk['all'],
-            'produkClosing' => $produk['closing'],
-            'closingRate' => $produk['closingRate'],
-            'detail' => $detail,
+            'produkGrup' => $produkGrup,
         ]);
     }
 
@@ -144,13 +168,13 @@ class HistogramController extends Controller
     }
 
     /**
-     * Product totals for the two pie charts, plus a closing rate computed from the
-     * SAME totals (total product-mentions-in-closing-visits / total product-mentions
-     * overall) — deliberately not a POI- or visit-level rate, so it always agrees with
-     * what the two pie charts show. Preserved from v1 exactly (its own comment there
-     * calls out keeping this "sinkron dengan pie").
+     * Feeds the three produk histograms (2026-07-30 rebuild, replacing the two
+     * donut charts). Each group gets one bar pair per produk: Ditawarkan (every
+     * kunjungan_produk row in range, whatever the visit's hasil) and Closing
+     * (only rows on a Closing visit) — the shape the client's example workbook
+     * defines.
      */
-    private function produkTotals(array $kantorIds, string $dari, string $sampai): array
+    private function produkPerGrup(array $kantorIds, string $dari, string $sampai): array
     {
         $rows = KunjunganProduk::query()
             ->join('kunjungan', 'kunjungan.id', '=', 'kunjungan_produk.kunjungan_id')
@@ -158,44 +182,39 @@ class HistogramController extends Controller
             ->whereIn('poi.kantor_id', $kantorIds)
             ->whereBetween('kunjungan.tanggal_kunjungan', [$dari, $sampai])
             ->select('kunjungan_produk.produk')
-            ->selectRaw('COUNT(*) as total')
-            ->selectRaw("SUM(CASE WHEN kunjungan.hasil = ? THEN 1 ELSE 0 END) as closing", [Kunjungan::HASIL_CLOSING])
+            ->selectRaw('COUNT(*) as ditawarkan')
+            ->selectRaw('SUM(CASE WHEN kunjungan.hasil = ? THEN 1 ELSE 0 END) as closing', [Kunjungan::HASIL_CLOSING])
             ->groupBy('kunjungan_produk.produk')
-            ->get();
+            ->get()
+            ->keyBy('produk');
 
-        $all = [];
-        $closing = [];
-        foreach ($rows as $row) {
-            $all[$row->produk] = (int) $row->total;
-            if ((int) $row->closing > 0) {
-                $closing[$row->produk] = (int) $row->closing;
+        $out = [];
+        foreach (self::PRODUK_GRUP as $judul => $produkList) {
+            $labels = [];
+            $ditawarkan = [];
+            $closing = [];
+
+            foreach ($produkList as $produk) {
+                $row = $rows[$produk] ?? null;
+                $labels[] = self::PRODUK_LABEL[$produk] ?? $produk;
+                $ditawarkan[] = (int) ($row->ditawarkan ?? 0);
+                $closing[] = (int) ($row->closing ?? 0);
             }
+
+            $totalDitawarkan = array_sum($ditawarkan);
+            $totalClosing = array_sum($closing);
+
+            $out[] = [
+                'judul' => $judul,
+                'labels' => $labels,
+                'ditawarkan' => $ditawarkan,
+                'closing' => $closing,
+                'total_ditawarkan' => $totalDitawarkan,
+                'total_closing' => $totalClosing,
+                'closing_rate' => $totalDitawarkan > 0 ? round($totalClosing / $totalDitawarkan * 100, 1) : 0,
+            ];
         }
 
-        $totalAll = array_sum($all);
-        $totalClosing = array_sum($closing);
-
-        return [
-            'all' => $all,
-            'closing' => $closing,
-            'closingRate' => $totalAll > 0 ? round($totalClosing / $totalAll * 100, 1) : 0,
-        ];
-    }
-
-    /**
-     * Closing-only visits in range, paginated — v1 dumped this unbounded into a
-     * scrolling div, which doesn't hold up at PRD's target scale.
-     */
-    private function detailAkuisisi(array $kantorIds, string $dari, string $sampai)
-    {
-        return Kunjungan::query()
-            ->with(['poi.kantor', 'produkList'])
-            ->whereHas('poi', fn ($q) => $q->whereIn('kantor_id', $kantorIds))
-            ->where('hasil', Kunjungan::HASIL_CLOSING)
-            ->whereBetween('tanggal_kunjungan', [$dari, $sampai])
-            ->orderByDesc('tanggal_kunjungan')
-            ->orderByDesc('id')
-            ->paginate(self::PER_PAGE)
-            ->withQueryString();
+        return $out;
     }
 }

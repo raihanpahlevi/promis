@@ -51,72 +51,34 @@
     <div class="chart-lg"><canvas id="histogramChart"></canvas></div>
   </div>
 
-  <div class="grid-2" style="margin-bottom:16px">
-    <div class="panel">
-      <div class="panel-head"><h3>Produk Ditawarkan</h3></div>
-      <div class="chart-mini"><canvas id="pieAllChart"></canvas></div>
-    </div>
-    <div class="panel">
+  {{-- Three produk histograms, stacked full width (2026-07-30, replacing the
+       two donut charts). Each produk shows Ditawarkan vs Closing side by side;
+       the groups have 3 / 6 / 9 produk, so each needs the whole row for its
+       labels to stay readable. --}}
+  @foreach ($produkGrup as $i => $grup)
+    <div class="panel" style="margin-bottom:16px">
       <div class="panel-head">
-        <h3>Closing Rate Produk <span class="closing-rate-badge">({{ $closingRate }}%)</span></h3>
+        <h3>{{ $grup['judul'] }}</h3>
+        <span class="badge" style="background:var(--brand-50);color:var(--brand-700)">
+          {{ number_format($grup['total_closing']) }} / {{ number_format($grup['total_ditawarkan']) }} closing
+          &middot; {{ $grup['closing_rate'] }}%
+        </span>
       </div>
-      <p style="font-size:11px;color:#8A6B55;margin:-8px 0 0">Total produk closing / total produk ditawarkan.</p>
-      <div class="chart-mini"><canvas id="pieClosingChart"></canvas></div>
+      @if ($grup['total_ditawarkan'] === 0)
+        <div class="empty-state-rich">
+          <i class="bi bi-bar-chart"></i>
+          <p>Belum ada produk {{ $grup['judul'] }} yang ditawarkan pada rentang ini.</p>
+          <small>Coba ubah rentang tanggal atau filter cabang di atas.</small>
+        </div>
+      @else
+        <div class="chart-lg"><canvas id="produkGrup{{ $i }}"></canvas></div>
+      @endif
     </div>
-  </div>
-
-  <div class="table-panel">
-    <div class="panel-head"><h3>Detail Akuisisi (Closing)</h3></div>
-    @if ($detail->isEmpty())
-      <div class="empty-state-rich">
-        <i class="bi bi-inboxes"></i>
-        <p>Tidak ada data closing pada rentang ini.</p>
-        <small>Coba ubah rentang tanggal atau filter kantor di atas.</small>
-      </div>
-    @else
-      <div style="overflow-x:auto">
-        <table class="table-ledger table-responsive-stack">
-          <thead>
-            <tr><th>Nama POI</th><th>Tanggal</th><th>Kantor</th><th>Produk</th></tr>
-          </thead>
-          <tbody>
-            @foreach ($detail as $row)
-              <tr>
-                <td class="cell-heading">{{ $row->poi->nama_poi ?? '-' }}</td>
-                <td data-label="Tanggal">{{ $row->tanggal_kunjungan->format('d M Y') }}</td>
-                <td data-label="Kantor">{{ $row->poi->kantor->nama ?? '-' }}</td>
-                <td data-label="Produk">{{ $row->produkList->pluck('produk')->implode(', ') ?: '-' }}</td>
-              </tr>
-            @endforeach
-          </tbody>
-        </table>
-      </div>
-
-      @include('partials.pagination', ['paginator' => $detail])
-    @endif
-  </div>
+  @endforeach
 
   @push('scripts')
   <script>
     Chart.register(ChartDataLabels);
-    Chart.register({
-      id: 'centerText',
-      afterDraw(chart) {
-        if (chart.config.type !== 'doughnut') return;
-        var ctx = chart.ctx, area = chart.chartArea;
-        if (!area) return;
-        var total = chart.data.datasets[0].data.reduce((a, b) => a + b, 0);
-        var x = (area.left + area.right) / 2, y = (area.top + area.bottom) / 2;
-        ctx.save();
-        ctx.font = 'bold 18px Inter';
-        ctx.fillStyle = '#3E2723';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(total, x, y);
-        ctx.restore();
-      }
-    });
-
     new Chart(document.getElementById('histogramChart'), {
       type: 'bar',
       data: {
@@ -136,23 +98,57 @@
       }
     });
 
-    new Chart(document.getElementById('pieAllChart'), {
-      type: 'doughnut',
-      data: {
-        labels: @json(array_keys($produkAll)),
-        datasets: [{data: @json(array_values($produkAll)), backgroundColor: ['#6F4E37','#A47148','#2E7D32','#1565C0','#B26A00','#8D6748','#C62828','#4E342E']}]
-      },
-      options: {cutout: '65%', maintainAspectRatio: false, plugins: {legend: {position: 'bottom', labels: {font: {size: 10}}}}}
-    });
+    // Measured from the element's own geometry: BarElement in Chart.js v4 has no
+    // `.height` property (an earlier cut read it and always got undefined, so
+    // every label fell back to sitting above the bar — where a full-height bar
+    // pushed it outside the chart area and it vanished). y..base is the real
+    // drawn extent.
+    function tinggiBalok(ctx) {
+      var el = ctx.chart.getDatasetMeta(ctx.datasetIndex).data[ctx.dataIndex];
+      if (!el) return 0;
+      var p = el.getProps(['y', 'base'], true);
+      return Math.abs(p.base - p.y);
+    }
 
-    new Chart(document.getElementById('pieClosingChart'), {
-      type: 'doughnut',
+    // Bars packed tight with the figure printed inside the bar (client's ask):
+    // categoryPercentage/barPercentage near 1 removes the gap Chart.js leaves by
+    // default, and the datalabel is centre-anchored in white. A bar too short to
+    // hold text falls back to sitting just above it in brand ink.
+@foreach ($produkGrup as $i => $grup)
+@if ($grup['total_ditawarkan'] > 0)
+    new Chart(document.getElementById('produkGrup{{ $i }}'), {
+      type: 'bar',
       data: {
-        labels: @json(array_keys($produkClosing)),
-        datasets: [{data: @json(array_values($produkClosing)), backgroundColor: ['#2E7D32','#A47148','#1565C0','#C62828','#6F4E37','#8D6748']}]
+        labels: @json($grup['labels']),
+        datasets: [
+          {label: 'Ditawarkan', data: @json($grup['ditawarkan']), backgroundColor: '#A47148', borderRadius: 4, borderSkipped: false},
+          {label: 'Closing', data: @json($grup['closing']), backgroundColor: '#2E7D32', borderRadius: 4, borderSkipped: false}
+        ]
       },
-      options: {cutout: '65%', maintainAspectRatio: false, plugins: {legend: {position: 'bottom', labels: {font: {size: 10}}}}}
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        categoryPercentage: 0.92,
+        barPercentage: 0.96,
+        layout: {padding: {top: 14}},
+        plugins: {
+          legend: {position: 'bottom'},
+          datalabels: {
+            color: function (ctx) { return tinggiBalok(ctx) >= 18 ? '#fff' : '#3E2723'; },
+            anchor: function (ctx) { return tinggiBalok(ctx) >= 18 ? 'center' : 'end'; },
+            align: function (ctx) { return tinggiBalok(ctx) >= 18 ? 'center' : 'top'; },
+            clamp: true,
+            font: {weight: 'bold', size: 11},
+            formatter: function (v) { return v > 0 ? v : ''; }
+          }
+        },
+        scales: {
+          x: {grid: {display: false}},
+          y: {beginAtZero: true, ticks: {precision: 0}}
+        }
+      }
     });
+@endif
+@endforeach
   </script>
   @endpush
 @endsection

@@ -79,7 +79,8 @@ class HistogramTest extends TestCase
 
         $response->assertOk();
         $response->assertViewHas('selectedKantorId', null);
-        $response->assertViewHas('detail', fn ($detail) => $detail->total() === 0);
+        // The other kantor's closing must not surface anywhere on the page.
+        $response->assertViewHas('histogram', fn ($h) => array_sum($h['closing']) === 0);
     }
 
     public function test_area_filter_narrows_the_histogram_scope(): void
@@ -127,60 +128,67 @@ class HistogramTest extends TestCase
         $response->assertViewHas('histogram', fn ($h) => $h['closing'] === [1]);
     }
 
-    public function test_produk_totals_and_closing_rate_are_consistent_with_pies(): void
+    public function test_produk_histograms_split_ditawarkan_from_closing(): void
     {
         $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
         $poiA = $this->poi($kantor);
         $poiB = $this->poi($kantor);
         $sales = User::factory()->create(['force_password_change' => false]);
 
-        $k1 = Kunjungan::create([
+        $closingVisit = Kunjungan::create([
             'poi_id' => $poiA->id, 'sales_id' => $sales->id,
             'tanggal_kunjungan' => now()->toDateString(), 'hasil' => Kunjungan::HASIL_CLOSING,
         ]);
-        $k1->produkList()->create(['produk' => 'Tabungan']);
+        $closingVisit->produkList()->create(['produk' => 'Tabungan']);
+        $closingVisit->produkList()->create(['produk' => 'KUR']);
 
-        $k2 = Kunjungan::create([
+        // Offered but the visit didn't close: counts as Ditawarkan only.
+        $openVisit = Kunjungan::create([
             'poi_id' => $poiB->id, 'sales_id' => $sales->id,
             'tanggal_kunjungan' => now()->toDateString(), 'hasil' => Kunjungan::HASIL_BERMINAT,
         ]);
-        $k2->produkList()->create(['produk' => 'Tabungan']);
+        $openVisit->produkList()->create(['produk' => 'Tabungan']);
+        $openVisit->produkList()->create(['produk' => 'QRIS']);
 
         $admin = User::factory()->admin()->create(['force_password_change' => false]);
         $response = $this->actingAs($admin)->get('/histogram?kantor='.$kantor->id);
 
         $response->assertOk();
-        $response->assertViewHas('produkAll', fn ($p) => $p['Tabungan'] === 2);
-        $response->assertViewHas('produkClosing', fn ($p) => $p['Tabungan'] === 1);
-        // 1 closing mention / 2 total mentions = 50%.
-        $response->assertViewHas('closingRate', 50.0);
+        $grup = collect($response->viewData('produkGrup'))->keyBy('judul');
+
+        $this->assertSame(['DPK', 'LOAN', 'Transaksional & Lainnya'], $grup->keys()->all());
+
+        $dpk = $grup['DPK'];
+        $tabungan = array_search('Tabungan', $dpk['labels'], true);
+        $this->assertSame(2, $dpk['ditawarkan'][$tabungan]);
+        $this->assertSame(1, $dpk['closing'][$tabungan]);
+        $this->assertSame(50.0, $dpk['closing_rate'], 'Satu dari dua penawaran Tabungan jadi closing.');
+
+        $loan = $grup['LOAN'];
+        $kur = array_search('KUR', $loan['labels'], true);
+        $this->assertSame(1, $loan['ditawarkan'][$kur]);
+        $this->assertSame(1, $loan['closing'][$kur]);
+
+        $trx = $grup['Transaksional & Lainnya'];
+        $qris = array_search('QRIS', $trx['labels'], true);
+        $this->assertSame(1, $trx['ditawarkan'][$qris]);
+        $this->assertSame(0, $trx['closing'][$qris], 'QRIS ditawarkan tapi kunjungannya belum closing.');
     }
 
-    public function test_detail_table_only_shows_closing_and_is_paginated(): void
+    /**
+     * The three groups must cover Kunjungan::PRODUK_OPTIONS exactly — a produk
+     * added to the model but not placed in a group would silently vanish from
+     * the page.
+     */
+    public function test_the_three_groups_partition_every_produk_exactly_once(): void
     {
-        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
-        $sales = User::factory()->create(['force_password_change' => false]);
-
-        for ($i = 0; $i < 20; $i++) {
-            $poi = $this->poi($kantor);
-            Kunjungan::create([
-                'poi_id' => $poi->id, 'sales_id' => $sales->id,
-                'tanggal_kunjungan' => now()->toDateString(), 'hasil' => Kunjungan::HASIL_CLOSING,
-            ]);
-        }
-        $poiNonClosing = $this->poi($kantor);
-        Kunjungan::create([
-            'poi_id' => $poiNonClosing->id, 'sales_id' => $sales->id,
-            'tanggal_kunjungan' => now()->toDateString(), 'hasil' => Kunjungan::HASIL_BERMINAT,
-        ]);
-
         $admin = User::factory()->admin()->create(['force_password_change' => false]);
-        $response = $this->actingAs($admin)->get('/histogram?kantor='.$kantor->id);
+        $response = $this->actingAs($admin)->get('/histogram');
 
         $response->assertOk();
-        $paginator = $response->viewData('detail');
-        $this->assertSame(20, $paginator->total());
-        $this->assertLessThan(20, $paginator->count());
-        $this->assertTrue($paginator->hasMorePages());
+        $rendered = collect($response->viewData('produkGrup'))->pluck('labels')->flatten();
+
+        $this->assertCount(count(Kunjungan::PRODUK_OPTIONS), $rendered);
+        $this->assertCount($rendered->count(), $rendered->unique(), 'Ada produk yang muncul di dua grup.');
     }
 }
