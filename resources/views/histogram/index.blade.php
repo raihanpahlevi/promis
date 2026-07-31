@@ -133,11 +133,16 @@
         plugins: {
           legend: {position: 'bottom'},
           datalabels: {
-            color: function (ctx) { return tinggiBalok(ctx) >= 18 ? '#fff' : '#3E2723'; },
-            anchor: function (ctx) { return tinggiBalok(ctx) >= 18 ? 'center' : 'end'; },
-            align: function (ctx) { return tinggiBalok(ctx) >= 18 ? 'center' : 'top'; },
+            // Always inside the bar, never floating above it. A tall bar centres
+            // the figure; a short one tucks it just under the bar's top edge
+            // (anchor at the top, drawn back down into the bar) at a smaller
+            // size, which is what lets a bar only ~20px tall still hold it.
+            color: '#fff',
+            anchor: function (ctx) { return tinggiBalok(ctx) >= 26 ? 'center' : 'end'; },
+            align: function (ctx) { return tinggiBalok(ctx) >= 26 ? 'center' : 'start'; },
+            offset: function (ctx) { return tinggiBalok(ctx) >= 26 ? 0 : 1; },
             clamp: true,
-            font: {weight: 'bold', size: 11},
+            font: function (ctx) { return {weight: 'bold', size: tinggiBalok(ctx) >= 26 ? 11 : 9}; },
             formatter: function (v) { return v > 0 ? v : ''; }
           }
         },
