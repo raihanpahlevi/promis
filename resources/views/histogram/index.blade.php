@@ -85,7 +85,7 @@
         labels: @json($histogram['labels']),
         datasets: [
           {label: 'Closing', data: @json($histogram['closing']), backgroundColor: '#2E7D32'},
-          {label: 'Belum Closing', data: @json($histogram['non_closing']), backgroundColor: '#C62828'}
+          {label: 'Ditawarkan', data: @json($histogram['non_closing']), backgroundColor: '#C62828'}
         ]
       },
       options: {
@@ -121,7 +121,7 @@
       data: {
         labels: @json($grup['labels']),
         datasets: [
-          {label: 'Ditawarkan', data: @json($grup['ditawarkan']), backgroundColor: '#A47148', borderRadius: 4, borderSkipped: false},
+          {label: 'Ditawarkan', data: @json($grup['ditawarkan']), backgroundColor: '#C62828', borderRadius: 4, borderSkipped: false},
           {label: 'Closing', data: @json($grup['closing']), backgroundColor: '#2E7D32', borderRadius: 4, borderSkipped: false}
         ]
       },
