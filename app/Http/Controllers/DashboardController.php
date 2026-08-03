@@ -8,6 +8,7 @@ use App\Models\Kunjungan;
 use App\Models\KunjunganProduk;
 use App\Models\Poi;
 use App\Models\User;
+use App\Services\DashboardCache;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -50,6 +51,8 @@ class DashboardController extends Controller
 
     private const BUKAN_NASABAH = 'Bukan Nasabah BNI';
 
+    public function __construct(private readonly DashboardCache $cache) {}
+
     public function index(Request $request): View
     {
         $user = $request->user();
@@ -58,8 +61,12 @@ class DashboardController extends Controller
 
         $isFullyUnscoped = $scope['selectedKantorIds'] === [] && $scope['selectedClusters'] === [] && $scope['selectedArea'] === null;
         $totals = $this->resolveTotals($user, $kantorIds, $isFullyUnscoped);
-        $area = $this->areaBreakdown($kantorIds);
-        $sektor = $this->sektorBreakdown($kantorIds);
+
+        // The two POI-wide breakdowns are what made this page slow under load —
+        // see App\Services\DashboardCache for the measurements. They depend on
+        // nothing but the kantor scope, so they cache as-is.
+        $area = $this->cache->remember('area', $kantorIds, fn () => $this->areaBreakdown($kantorIds));
+        $sektor = $this->cache->remember('sektor', $kantorIds, fn () => $this->sektorBreakdown($kantorIds));
 
         $periode = in_array($request->input('periode'), ['day', 'week', 'month'], true)
             ? $request->input('periode')

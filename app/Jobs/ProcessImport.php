@@ -6,6 +6,7 @@ use App\Imports\PoiImport;
 use App\Imports\UserImport;
 use App\Models\ImportJob;
 use App\Models\User;
+use App\Services\DashboardCache;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -116,6 +117,13 @@ class ProcessImport implements ShouldQueue
             ]);
         } finally {
             Storage::disk('local')->delete($job->stored_path);
+
+            // A bulk import is the one thing that moves the Dashboard's cached
+            // POI aggregates by a lot, so retire them now rather than leaving
+            // the team staring at pre-import numbers until the TTL lapses.
+            // In `finally` on purpose: a run that died partway through still
+            // wrote rows, so its numbers are stale too.
+            app(DashboardCache::class)->flush();
         }
     }
 
