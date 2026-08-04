@@ -740,4 +740,74 @@ class PoiImportTest extends TestCase
             ->assertSee('Riwayat Import')
             ->assertSee('poi_riwayat_test.xlsx');
     }
+
+    // ---------------- Export round-trip (2026-08-04) ----------------
+
+    /**
+     * PoiExport escapes values opening with = + - @ with a leading apostrophe
+     * so Excel can't read them as a formula. Re-uploading that same file used
+     * to store the apostrophe as part of the name, so "@TOKO" came back as
+     * "'@TOKO" — a different name, hence a brand-new POI. Production ended up
+     * with 34 such rows, 26 of them straight duplicates of their unprefixed
+     * original, on the export -> fix -> re-upload path the team uses daily.
+     */
+    public function test_the_exports_formula_guard_is_stripped_on_the_way_back_in(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+
+        $this->actingAs($admin)->post('/poi-import', [
+            'file' => $this->buildFixture([
+                ["'@TOKO INSTAGRAM", "'=JL MERDEKA", Poi::SEKTOR_OPTIONS[0], null, 'Ring 1', 'Kantor Kutip', 'BNI - Merchant', null],
+            ]),
+        ]);
+
+        $poi = Poi::where('kantor_id', Kantor::where('nama', 'Kantor Kutip')->value('id'))->firstOrFail();
+        $this->assertSame('@TOKO INSTAGRAM', $poi->nama_poi);
+        $this->assertSame('=JL MERDEKA', $poi->alamat);
+    }
+
+    /**
+     * The strip is deliberately narrow: only an apostrophe followed by one of
+     * the characters the export actually escapes. A name that genuinely opens
+     * with a quote — production has "'DOORSMEER' LIPAN35" — must survive.
+     */
+    public function test_a_name_that_genuinely_starts_with_a_quote_is_left_alone(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+
+        $this->actingAs($admin)->post('/poi-import', [
+            'file' => $this->buildFixture([
+                ["'DOORSMEER' LIPAN35", 'Jl. Apa Saja', Poi::SEKTOR_OPTIONS[0], null, 'Ring 1', 'Kantor Apostrof', 'BNI - Merchant', null],
+            ]),
+        ]);
+
+        $poi = Poi::where('kantor_id', Kantor::where('nama', 'Kantor Apostrof')->value('id'))->firstOrFail();
+        $this->assertSame("'DOORSMEER' LIPAN35", $poi->nama_poi);
+    }
+
+    /**
+     * The whole point: the same file exported and re-uploaded must land on the
+     * one POI it came from, not spawn a second copy.
+     */
+    public function test_reimporting_an_escaped_name_does_not_create_a_second_poi(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $rows = [['@TOKO INSTAGRAM', 'Jl. Merdeka', Poi::SEKTOR_OPTIONS[0], null, 'Ring 1', 'Kantor RT', 'BNI - Merchant', null]];
+
+        $this->actingAs($admin)->post('/poi-import', ['file' => $this->buildFixture($rows)]);
+        $kantorId = Kantor::where('nama', 'Kantor RT')->value('id');
+        $this->assertSame(1, Poi::where('kantor_id', $kantorId)->count());
+
+        // Same POI coming back through the export's escaping.
+        $this->actingAs($admin)->post('/poi-import', [
+            'file' => $this->buildFixture([["'@TOKO INSTAGRAM", 'Jl. Merdeka', Poi::SEKTOR_OPTIONS[0], null, 'Ring 1', 'Kantor RT', 'BNI - Merchant', null]]),
+        ]);
+
+        $this->assertSame(2, Poi::where('kantor_id', $kantorId)->count(),
+            'Tanpa ID, baris kedua memang jadi POI baru — tapi namanya harus identik, bukan berbeda karena kutip.');
+        $this->assertSame(
+            ['@TOKO INSTAGRAM', '@TOKO INSTAGRAM'],
+            Poi::where('kantor_id', $kantorId)->orderBy('id')->pluck('nama_poi')->all(),
+        );
+    }
 }

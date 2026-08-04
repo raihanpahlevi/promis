@@ -218,8 +218,10 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
             return $this->buildUpdateModel((int) $idRaw, $row, $kantorId);
         }
 
-        $nama = trim((string) ($row['nama'] ?? ''));
-        $alamat = trim((string) ($row['alamat'] ?? ''));
+        // stripQuotePrefix: the export escapes leading = + - @ with an
+        // apostrophe, and re-uploading that file used to bake it into the name.
+        $nama = $this->stripQuotePrefix(trim((string) ($row['nama'] ?? '')));
+        $alamat = $this->stripQuotePrefix(trim((string) ($row['alamat'] ?? '')));
         $kategori = trim((string) ($row['kategori'] ?? ''));
         $ringArea = $this->normalizeArea($row['ring_area'] ?? null);
         $bank = $this->statusMitraMap[$this->normalize((string) ($row['bank'] ?? ''))] ?? Poi::BELUM_BERMITRA_BNI;
@@ -260,8 +262,10 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
             return null;
         }
 
-        $nama = trim((string) ($row['nama'] ?? ''));
-        $alamat = trim((string) ($row['alamat'] ?? ''));
+        // stripQuotePrefix: the export escapes leading = + - @ with an
+        // apostrophe, and re-uploading that file used to bake it into the name.
+        $nama = $this->stripQuotePrefix(trim((string) ($row['nama'] ?? '')));
+        $alamat = $this->stripQuotePrefix(trim((string) ($row['alamat'] ?? '')));
         $kategori = trim((string) ($row['kategori'] ?? ''));
         $subKategori = $this->cleanSubSektor($row['sub_kategori'] ?? null);
         $ringArea = $this->normalizeArea($row['ring_area'] ?? null);
@@ -548,9 +552,29 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
 
     private function blankToNull(mixed $value): ?string
     {
-        $value = is_string($value) ? trim($value) : $value;
+        $value = is_string($value) ? $this->stripQuotePrefix(trim($value)) : $value;
 
         return $value === '' || $value === null ? null : (string) $value;
+    }
+
+    /**
+     * Removes the leading apostrophe our own export puts in front of values
+     * that begin with = + - @ (PoiExport::safe(), anti formula-injection).
+     *
+     * Without this the guard survives a round trip and becomes part of the
+     * data: the team's normal workflow is export -> fix in Excel -> re-upload,
+     * so "@DAPOERAMIARKA" came back as "'@DAPOERAMIARKA", which is a different
+     * name and therefore a NEW POI. Production had 34 rows like it and 26 were
+     * outright duplicates of their unprefixed original; one POI had been round
+     * -tripped twice and carried two apostrophes.
+     *
+     * Only strips when what follows is one of the characters the export
+     * actually escapes, so a name that genuinely opens with a quote
+     * ("'DOORSMEER' LIPAN35") is left alone.
+     */
+    private function stripQuotePrefix(string $value): string
+    {
+        return preg_match("/^'[=+\-@]/", $value) === 1 ? substr($value, 1) : $value;
     }
 
     /**
