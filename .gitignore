@@ -27,3 +27,27 @@ Homestead.yaml
 Thumbs.db
 
 /.claude
+
+# Working data files stay local — never publish operational data to the repo.
+# These land in the project root all the time (POI/user exports, duplicate
+# lists, screenshots) and carry real customer records; the repo is a code
+# remote, not a data store.
+*.xlsx
+*.xls
+*.csv
+*.jpg
+*.jpeg
+*.png
+# The two blank templates are the exception: they are app assets, served by
+# PoiImportController::template() / UserImportController::template() straight
+# from base_path(), so the "Unduh template kosong" button 404s on a fresh
+# deploy if they stop being tracked.
+!Template_Import_POI_PROMIS.xlsx
+!Template_Import_User_PROMIS.xlsx
+# Images that ship as part of the UI, not working files.
+!public/**/*.png
+!public/**/*.jpg
+!public/**/*.jpeg
+!resources/**/*.png
+!resources/**/*.jpg
+!resources/**/*.jpeg
