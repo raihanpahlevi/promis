@@ -106,6 +106,7 @@
               <th>Hasil</th>
               <th>Norek/CIF</th>
               <th class="num" style="text-align:right">Nominal</th>
+              <th>Catatan</th>
               <th></th>
             </tr>
           </thead>
@@ -125,6 +126,10 @@
                 <td><span class="badge {{ $k->hasilBadgeClass() }}">{{ $k->hasil }}</span></td>
                 <td>{{ $k->norek_cif ?? '-' }}</td>
                 <td class="num" style="text-align:right">{{ $k->nominal !== null ? 'Rp '.number_format((float) $k->nominal, 0, ',', '.') : '-' }}</td>
+                {{-- Free text a sales typed in the field, so it can run long:
+                     clamped to a readable width with the full text on hover
+                     rather than letting one entry stretch the whole row. --}}
+                <td class="cell-catatan" title="{{ $k->catatan }}">{{ $k->catatan ?: '-' }}</td>
                 <td class="cell-actions">
                   @if ($canReopen)
                     <form method="POST" action="{{ route('kunjungan.reopen', $k) }}" style="display:inline"

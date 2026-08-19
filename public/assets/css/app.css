@@ -423,6 +423,13 @@ table.table-ledger thead th{
   border-bottom:1.5px solid var(--brand-100);
 }
 table.table-ledger tbody td{padding:10px 12px;font-size:12.5px}
+/* Catatan is free text typed in the field and occasionally runs to a
+   paragraph. Capped and ellipsised so one long entry can't stretch the row
+   and push the action buttons off screen; the cell carries the full text as
+   a title attribute for hovering. */
+table.table-ledger td.cell-catatan{
+  max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#8A6B55;
+}
 
 /* ---- Detail key-value ledger (POI/record show pages) — replaces bare <table> ---- */
 .detail-ledger{display:flex;flex-direction:column}
