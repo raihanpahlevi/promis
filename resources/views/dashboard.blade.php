@@ -118,10 +118,19 @@
   <div class="grid-3">
     <div class="panel">
       <div class="panel-head"><h3>Top Ring Area (Ring 1&ndash;3)</h3></div>
+      {{-- A ring covers a different distance in a big city than elsewhere, so
+           the band can only be named when everything in scope is one class. --}}
+      <p style="font-size:11px;color:#8A6B55;margin:-8px 0 12px">
+        @if ($ringJarak === null)
+          Cakupan ini gabungan Kota Besar &amp; Non Kota Besar &mdash; saring per Cabang untuk melihat jaraknya.
+        @else
+          Jarak sesuai Cabang pada cakupan ini.
+        @endif
+      </p>
       @foreach ($area['all'] as $key => $a)
         @php($rcls = match($key) { 'Ring 1' => 'r1', 'Ring 2' => 'r2', 'Ring 3' => 'r3', default => 'r4' })
         <div class="area-label {{ $rcls }}">
-          <span>{{ $a['label'] }}</span>
+          <span>{{ $a['label'] }}{{ isset($ringJarak[$key]) ? ' ('.$ringJarak[$key].')' : '' }}</span>
           <span class="muted">{{ number_format($a['total']) }} ({{ $a['persen'] }}%)</span>
         </div>
         <div class="area-bar-container">
@@ -135,7 +144,7 @@
       @foreach ($area['bni'] as $key => $a)
         @php($rcls = match($key) { 'Ring 1' => 'r1', 'Ring 2' => 'r2', 'Ring 3' => 'r3', default => 'r4' })
         <div class="area-label {{ $rcls }}">
-          <span>{{ $a['label'] }}</span>
+          <span>{{ $a['label'] }}{{ isset($ringJarak[$key]) ? ' ('.$ringJarak[$key].')' : '' }}</span>
           <span class="muted">{{ number_format($a['total']) }} ({{ $a['persen'] }}%)</span>
         </div>
         <div class="area-bar-container">
@@ -149,7 +158,7 @@
       @foreach ($area['non'] as $key => $a)
         @php($rcls = match($key) { 'Ring 1' => 'r1', 'Ring 2' => 'r2', 'Ring 3' => 'r3', default => 'r4' })
         <div class="area-label {{ $rcls }}">
-          <span>{{ $a['label'] }}</span>
+          <span>{{ $a['label'] }}{{ isset($ringJarak[$key]) ? ' ('.$ringJarak[$key].')' : '' }}</span>
           <span class="muted">{{ number_format($a['total']) }} ({{ $a['persen'] }}%)</span>
         </div>
         <div class="area-bar-container">

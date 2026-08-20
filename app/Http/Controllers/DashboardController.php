@@ -66,6 +66,7 @@ class DashboardController extends Controller
         // see App\Services\DashboardCache for the measurements. They depend on
         // nothing but the kantor scope, so they cache as-is.
         $area = $this->cache->remember('area', $kantorIds, fn () => $this->areaBreakdown($kantorIds));
+        $ringJarak = $this->ringJarakUntukScope($kantorIds);
         $sektor = $this->cache->remember('sektor', $kantorIds, fn () => $this->sektorBreakdown($kantorIds));
 
         $periode = in_array($request->input('periode'), ['day', 'week', 'month'], true)
@@ -89,6 +90,7 @@ class DashboardController extends Controller
             'totals' => $totals,
             'closing' => $closing,
             'area' => $area,
+            'ringJarak' => $ringJarak,
             'sektor' => $sektor,
             'periode' => $periode,
             'funnel' => $funnel,
@@ -309,6 +311,37 @@ class DashboardController extends Controller
      * All 4 rings. All three variants (all/bni/non) divide by the same
      * all-status ring total — preserved from v1 as-is.
      */
+    /**
+     * Distance bands to print next to each ring on this page, or null when the
+     * current scope can't have one.
+     *
+     * A ring means a different distance in a big city than anywhere else
+     * (Kantor::ringLabel()), and the ring panels here aggregate every Cabang in
+     * scope at once. That is only answerable when the scope is all one class —
+     * filter down to Padang and "Ring 1" is 0-1 km, filter to Painan and it is
+     * 0-5 km, but leave it on Semua Kantor and the same bar holds both. Mixed
+     * scopes return null and the view says so rather than picking one band and
+     * mislabelling the other half of the bar.
+     *
+     * @return array<string, string>|null
+     */
+    private function ringJarakUntukScope(array $kantorIds): ?array
+    {
+        if ($kantorIds === []) {
+            return null;
+        }
+
+        $kelas = Kantor::whereIn('id', $kantorIds)->distinct()->pluck('kota_besar');
+
+        if ($kelas->count() !== 1) {
+            return null;
+        }
+
+        return $kelas->first()
+            ? Kantor::RING_JARAK_KOTA_BESAR
+            : Kantor::RING_JARAK_KOTA_KECIL;
+    }
+
     private function areaBreakdown(array $kantorIds): array
     {
         $base = fn () => Poi::query()

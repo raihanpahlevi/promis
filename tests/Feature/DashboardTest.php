@@ -401,4 +401,52 @@ class DashboardTest extends TestCase
         $this->assertSame(15.0, $sektor['persen_bni']);
         $this->assertSame(85.0, $sektor['persen_non']);
     }
+
+    // ---------------- Arti jarak Ring di dashboard (2026-08-20) ----------------
+
+    /**
+     * The ring panels aggregate every Cabang in scope, and a ring covers a
+     * different distance in a big city than elsewhere. Naming the band is only
+     * possible when the scope is all one class — otherwise a single bar would
+     * be labelled with a distance that is wrong for half the POI under it.
+     */
+    public function test_ring_distance_is_named_only_when_the_scope_is_one_city_class(): void
+    {
+        $besar = Kantor::create(['kode' => 'KB', 'nama' => '00 - PADANG', 'kota_besar' => true]);
+        $kecil = Kantor::create(['kode' => 'NKB', 'nama' => '00 - PAINAN', 'kota_besar' => false]);
+        $this->poi($besar, ['area' => 'Ring 1']);
+        $this->poi($kecil, ['area' => 'Ring 1']);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+
+        // Narrowed to a big-city Cabang.
+        $this->actingAs($admin)->get('/dashboard?kantor[]='.$besar->id)
+            ->assertViewHas('ringJarak', fn ($j) => $j['Ring 1'] === '0-1 km' && $j['Ring 3'] === '>5-10 km');
+
+        // Narrowed to a small-town Cabang — same label, different band.
+        $this->actingAs($admin)->get('/dashboard?kantor[]='.$kecil->id)
+            ->assertViewHas('ringJarak', fn ($j) => $j['Ring 1'] === '0-5 km' && $j['Ring 3'] === '>10 km');
+
+        // Both at once: no single band applies.
+        $this->actingAs($admin)->get('/dashboard')
+            ->assertViewHas('ringJarak', fn ($j) => $j === null);
+    }
+
+    public function test_a_mixed_scope_tells_the_reader_to_narrow_down(): void
+    {
+        $besar = Kantor::create(['kode' => 'KB', 'nama' => '00 - PADANG', 'kota_besar' => true]);
+        $kecil = Kantor::create(['kode' => 'NKB', 'nama' => '00 - PAINAN', 'kota_besar' => false]);
+        $this->poi($besar, ['area' => 'Ring 1']);
+        $this->poi($kecil, ['area' => 'Ring 1']);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+
+        $this->actingAs($admin)->get('/dashboard')
+            ->assertOk()
+            ->assertSee('saring per Cabang', false);
+
+        $this->actingAs($admin)->get('/dashboard?kantor[]='.$besar->id)
+            ->assertOk()
+            ->assertSee('Ring 1 (0-1 km)', false);
+    }
 }
