@@ -318,8 +318,9 @@ class DashboardController extends Controller
      * A ring means a different distance in a big city than anywhere else
      * (Kantor::ringLabel()), and the ring panels here aggregate every Cabang in
      * scope at once. That is only answerable when the scope is all one class —
-     * filter down to Padang and "Ring 1" is 0-1 km, filter to Painan and it is
-     * 0-5 km, but leave it on Semua Kantor and the same bar holds both. Mixed
+     * filter down to Padang and "Ring 1" is 0 - 1 Km, filter to Painan and it
+     * is 0 - 5 Km, but leave it on Semua Kantor and the same bar holds both.
+     * Mixed
      * scopes return null and the view says so rather than picking one band and
      * mislabelling the other half of the bar.
      *

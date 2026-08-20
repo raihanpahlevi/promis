@@ -384,13 +384,13 @@ class KantorTest extends TestCase
         $besar = Kantor::create(['kode' => 'KB', 'nama' => '00 - PADANG', 'kota_besar' => true]);
         $kecil = Kantor::create(['kode' => 'NKB', 'nama' => '00 - PAINAN', 'kota_besar' => false]);
 
-        $this->assertSame('Ring 1 (0-1 km)', $besar->ringLabel('Ring 1'));
-        $this->assertSame('Ring 2 (>1-5 km)', $besar->ringLabel('Ring 2'));
-        $this->assertSame('Ring 3 (>5-10 km)', $besar->ringLabel('Ring 3'));
+        $this->assertSame('Ring 1 (0 - 1 Km)', $besar->ringLabel('Ring 1'));
+        $this->assertSame('Ring 2 (> 1 - 10 Km)', $besar->ringLabel('Ring 2'));
+        $this->assertSame('Ring 3 (> 10 Km)', $besar->ringLabel('Ring 3'));
 
-        $this->assertSame('Ring 1 (0-5 km)', $kecil->ringLabel('Ring 1'));
-        $this->assertSame('Ring 2 (>5-10 km)', $kecil->ringLabel('Ring 2'));
-        $this->assertSame('Ring 3 (>10 km)', $kecil->ringLabel('Ring 3'));
+        $this->assertSame('Ring 1 (0 - 5 Km)', $kecil->ringLabel('Ring 1'));
+        $this->assertSame('Ring 2 (> 5 - 10 Km)', $kecil->ringLabel('Ring 2'));
+        $this->assertSame('Ring 3 (> 10 Km)', $kecil->ringLabel('Ring 3'));
     }
 
     /**

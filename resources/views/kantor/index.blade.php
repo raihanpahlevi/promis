@@ -32,8 +32,8 @@
              style="flex:1;min-width:140px;padding:10px 12px;border-radius:10px;border:1.5px solid var(--brand-100)">
       <input type="text" name="cabang_cluster" placeholder="Cabang-Cluster (opsional)"
              style="flex:1;min-width:160px;padding:10px 12px;border-radius:10px;border:1.5px solid var(--brand-100)">
-      {{-- Kota Besar changes what each Ring Area means: Ring 1 is 0-1 km here
-           and 0-5 km elsewhere. See Kantor::ringLabel(). --}}
+      {{-- Kota Besar changes what each Ring Area means: Ring 1 is 0 - 1 Km
+           here and 0 - 5 Km elsewhere. See Kantor::ringLabel(). --}}
       <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--brand-700);white-space:nowrap">
         <input type="checkbox" name="kota_besar" value="1" style="accent-color:var(--brand-500);width:16px;height:16px">
         Kota Besar
@@ -80,7 +80,7 @@
                     <input type="text" name="cabang_cluster" value="{{ $kantor->cabang_cluster }}" placeholder="Cabang-Cluster"
                            style="width:150px;padding:6px 10px;border-radius:8px;border:1px solid var(--brand-100);font-size:13px">
                     <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--brand-700);white-space:nowrap"
-                           title="Ring 1 = 0-1 km kalau dicentang, 0-5 km kalau tidak">
+                           title="Ring 1 = 0 - 1 Km kalau dicentang, 0 - 5 Km kalau tidak">
                       <input type="checkbox" name="kota_besar" value="1" @checked($kantor->kota_besar)
                              style="accent-color:var(--brand-500);width:15px;height:15px">
                       Kota Besar

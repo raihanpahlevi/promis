@@ -421,11 +421,11 @@ class DashboardTest extends TestCase
 
         // Narrowed to a big-city Cabang.
         $this->actingAs($admin)->get('/dashboard?kantor[]='.$besar->id)
-            ->assertViewHas('ringJarak', fn ($j) => $j['Ring 1'] === '0-1 km' && $j['Ring 3'] === '>5-10 km');
+            ->assertViewHas('ringJarak', fn ($j) => $j['Ring 1'] === '0 - 1 Km' && $j['Ring 3'] === '> 10 Km');
 
         // Narrowed to a small-town Cabang — same label, different band.
         $this->actingAs($admin)->get('/dashboard?kantor[]='.$kecil->id)
-            ->assertViewHas('ringJarak', fn ($j) => $j['Ring 1'] === '0-5 km' && $j['Ring 3'] === '>10 km');
+            ->assertViewHas('ringJarak', fn ($j) => $j['Ring 1'] === '0 - 5 Km' && $j['Ring 3'] === '> 10 Km');
 
         // Both at once: no single band applies.
         $this->actingAs($admin)->get('/dashboard')
@@ -447,6 +447,6 @@ class DashboardTest extends TestCase
 
         $this->actingAs($admin)->get('/dashboard?kantor[]='.$besar->id)
             ->assertOk()
-            ->assertSee('Ring 1 (0-1 km)', false);
+            ->assertSee('Ring 1 (0 - 1 Km)', false);
     }
 }

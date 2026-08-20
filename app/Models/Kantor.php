@@ -31,18 +31,19 @@ class Kantor extends Model
      * What each Ring Area label actually means in kilometres. The bands differ
      * by city size, which is the whole reason kantor.kota_besar exists: a
      * "Ring 1" POI is within 1 km of a Padang/Pekanbaru/Batam branch but can
-     * be up to 5 km out anywhere else. Keyed to Poi::AREA_OPTIONS.
+     * be up to 5 km out anywhere else. Only Ring 3 reads the same on both
+     * sides (> 10 Km). Keyed to Poi::AREA_OPTIONS.
      */
     public const RING_JARAK_KOTA_BESAR = [
-        'Ring 1' => '0-1 km',
-        'Ring 2' => '>1-5 km',
-        'Ring 3' => '>5-10 km',
+        'Ring 1' => '0 - 1 Km',
+        'Ring 2' => '> 1 - 10 Km',
+        'Ring 3' => '> 10 Km',
     ];
 
     public const RING_JARAK_KOTA_KECIL = [
-        'Ring 1' => '0-5 km',
-        'Ring 2' => '>5-10 km',
-        'Ring 3' => '>10 km',
+        'Ring 1' => '0 - 5 Km',
+        'Ring 2' => '> 5 - 10 Km',
+        'Ring 3' => '> 10 Km',
     ];
 
     /**
@@ -59,7 +60,7 @@ class Kantor extends Model
     }
 
     /**
-     * "Ring 1 (0-1 km)" — the label as it should read on screen.
+     * "Ring 1 (0 - 1 Km)" — the label as it should read on screen.
      */
     public function ringLabel(?string $ring): string
     {
