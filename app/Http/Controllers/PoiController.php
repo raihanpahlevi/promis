@@ -41,7 +41,7 @@ class PoiController extends Controller
             $query->where('status', $request->input('status'));
         }
 
-        // The POI's own Ring Area (Poi::AREA_OPTIONS, "Ring 1".."Ring 4") —
+        // The POI's own Ring Area (Poi::AREA_OPTIONS, "Ring 1".."Ring 3") —
         // query param renamed `area` -> `ring_area` (2026-07-23) to free up
         // `area` for the NEW Cabang-region filter below ($scope), which is a
         // completely different concept (see PoiImport's class docblock for

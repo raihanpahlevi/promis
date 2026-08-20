@@ -543,7 +543,7 @@ class PoiImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToModel
             return null;
         }
 
-        if (preg_match('/RING\s*([1-4])\b/', $normalized, $m)) {
+        if (preg_match('/RING\s*([1-3])\b/', $normalized, $m)) {
             return Poi::AREA_OPTIONS[((int) $m[1]) - 1];
         }
 
