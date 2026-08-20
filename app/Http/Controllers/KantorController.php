@@ -69,11 +69,19 @@ class KantorController extends Controller
      */
     private function validateKantor(Request $request, ?int $ignoreId = null): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'kode' => ['required', 'string', 'max:255', Rule::unique('kantor', 'kode')->ignore($ignoreId)],
             'nama' => ['required', 'string', 'max:255', Rule::unique('kantor', 'nama')->ignore($ignoreId)],
             'area' => ['nullable', 'string', 'max:255'],
             'cabang_cluster' => ['nullable', 'string', 'max:255'],
+            'kota_besar' => ['nullable', 'boolean'],
         ]);
+
+        // An unchecked checkbox is simply absent from the payload, so the key
+        // has to be forced in — otherwise update() would silently keep the old
+        // value and a Cabang could never be demoted out of Kota Besar.
+        $data['kota_besar'] = $request->boolean('kota_besar');
+
+        return $data;
     }
 }

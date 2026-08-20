@@ -70,6 +70,7 @@ class KantorImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToMo
         $area = $this->blankToNull($row['area'] ?? null);
         $cabangCluster = $this->blankToNull($row['cabang_cluster'] ?? null);
         $aktif = $this->parseAktif($row['aktif'] ?? null);
+        $kotaBesar = $this->parseAktif($row['kota_besar'] ?? null);
 
         $this->importedCount++;
 
@@ -109,6 +110,9 @@ class KantorImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToMo
             if ($cabangCluster !== null) {
                 $kantor->cabang_cluster = $cabangCluster;
             }
+            if ($kotaBesar !== null) {
+                $kantor->kota_besar = $kotaBesar;
+            }
             if ($aktif !== null) {
                 $kantor->is_active = $aktif;
             }
@@ -121,6 +125,7 @@ class KantorImport implements SkipsEmptyRows, SkipsOnError, SkipsOnFailure, ToMo
             'nama' => $nama,
             'area' => $area,
             'cabang_cluster' => $cabangCluster,
+            'kota_besar' => $kotaBesar ?? false,
             'is_active' => $aktif ?? true,
         ]);
     }

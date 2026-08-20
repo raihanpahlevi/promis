@@ -117,7 +117,7 @@
 
   <div class="grid-3">
     <div class="panel">
-      <div class="panel-head"><h3>Top Ring Area (Ring 1&ndash;4)</h3></div>
+      <div class="panel-head"><h3>Top Ring Area (Ring 1&ndash;3)</h3></div>
       @foreach ($area['all'] as $key => $a)
         @php($rcls = match($key) { 'Ring 1' => 'r1', 'Ring 2' => 'r2', 'Ring 3' => 'r3', default => 'r4' })
         <div class="area-label {{ $rcls }}">

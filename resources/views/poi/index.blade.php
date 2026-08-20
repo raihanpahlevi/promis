@@ -127,7 +127,7 @@
                 <td data-label="Area">{{ $poi->kantor->area ?? '-' }}</td>
                 <td data-label="Cabang-Cluster">{{ $poi->kantor->cabang_cluster ?? '-' }}</td>
                 <td data-label="Kategori">{{ $poi->sektor }}</td>
-                <td data-label="Ring Area">{{ $poi->area ?? '-' }}</td>
+                <td data-label="Ring Area">{{ $poi->kantor?->ringLabel($poi->area) ?? ($poi->area ?? '-') }}</td>
                 <td data-label="Status Mitra"><span class="badge {{ $poi->statusMitraBadgeClass() }}">{{ $poi->status_mitra }}</span></td>
                 <td data-label="PIC">{{ $poi->pic ?? '-' }}</td>
                 <td class="cell-actions">

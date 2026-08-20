@@ -43,7 +43,7 @@ class KantorExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMappi
 
     public function headings(): array
     {
-        return ['ID', 'Kode', 'Cabang', 'Area', 'Cabang-Cluster', 'Aktif'];
+        return ['ID', 'Kode', 'Cabang', 'Area', 'Cabang-Cluster', 'Kota Besar', 'Aktif'];
     }
 
     /**
@@ -57,6 +57,7 @@ class KantorExport implements FromQuery, ShouldAutoSize, WithHeadings, WithMappi
             $this->safe($row->nama),
             $this->safe($row->area),
             $this->safe($row->cabang_cluster),
+            $row->kota_besar ? 'Ya' : 'Tidak',
             $row->is_active ? 'Ya' : 'Tidak',
         ];
     }

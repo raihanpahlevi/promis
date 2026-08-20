@@ -370,4 +370,75 @@ class KantorTest extends TestCase
         $this->assertNotEmpty($summary['technical_errors']);
         $this->assertSame('JKT01', $target->fresh()->kode);
     }
+
+    // ---------------- Kota Besar & arti jarak Ring (2026-08-20) ----------------
+
+    /**
+     * The same Ring label means a different distance depending on the city:
+     * Ring 1 reaches 1 km in Padang/Pekanbaru/Batam and 5 km everywhere else.
+     * Nothing in the data recorded that, so the screen showed a bare "Ring 1"
+     * that meant two different things.
+     */
+    public function test_ring_label_carries_the_distance_band_for_its_city_class(): void
+    {
+        $besar = Kantor::create(['kode' => 'KB', 'nama' => '00 - PADANG', 'kota_besar' => true]);
+        $kecil = Kantor::create(['kode' => 'NKB', 'nama' => '00 - PAINAN', 'kota_besar' => false]);
+
+        $this->assertSame('Ring 1 (0-1 km)', $besar->ringLabel('Ring 1'));
+        $this->assertSame('Ring 2 (>1-5 km)', $besar->ringLabel('Ring 2'));
+        $this->assertSame('Ring 3 (>5-10 km)', $besar->ringLabel('Ring 3'));
+
+        $this->assertSame('Ring 1 (0-5 km)', $kecil->ringLabel('Ring 1'));
+        $this->assertSame('Ring 2 (>5-10 km)', $kecil->ringLabel('Ring 2'));
+        $this->assertSame('Ring 3 (>10 km)', $kecil->ringLabel('Ring 3'));
+    }
+
+    /**
+     * Ring stays free text on import, so a stale file can still land something
+     * outside Poi::AREA_OPTIONS. Showing the raw label beats inventing a
+     * distance for it.
+     */
+    public function test_an_unknown_or_blank_ring_gets_no_invented_distance(): void
+    {
+        $kantor = Kantor::create(['kode' => 'K', 'nama' => 'Kantor', 'kota_besar' => true]);
+
+        $this->assertSame('Ring 4', $kantor->ringLabel('Ring 4'));
+        $this->assertSame('-', $kantor->ringLabel(null));
+        $this->assertSame('-', $kantor->ringLabel('  '));
+    }
+
+    public function test_admin_can_set_and_later_clear_kota_besar(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+
+        $this->actingAs($admin)->post('/kantor', [
+            'kode' => 'PDG', 'nama' => '00 - PADANG', 'kota_besar' => '1',
+        ])->assertRedirect();
+        $kantor = Kantor::where('kode', 'PDG')->firstOrFail();
+        $this->assertTrue($kantor->kota_besar);
+
+        // Unchecking sends no field at all — it still has to demote the Cabang.
+        $this->actingAs($admin)->put("/kantor/{$kantor->id}", [
+            'kode' => 'PDG', 'nama' => '00 - PADANG',
+        ])->assertRedirect();
+        $this->assertFalse($kantor->fresh()->kota_besar);
+    }
+
+    public function test_kota_besar_survives_the_export_import_round_trip(): void
+    {
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $kantor = Kantor::create(['kode' => 'PDG', 'nama' => '00 - PADANG', 'kota_besar' => true]);
+
+        $response = $this->actingAs($admin)->get(route('export.kantor.download'));
+        $response->assertOk();
+        $sheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($response->baseResponse->getFile()->getPathname())->getActiveSheet();
+
+        $this->assertSame('Kota Besar', $sheet->getCell('F1')->getValue());
+        $baris = null;
+        foreach ($sheet->toArray() as $row) {
+            if (($row[0] ?? null) == $kantor->id) { $baris = $row; break; }
+        }
+        $this->assertNotNull($baris, 'Cabang tidak ketemu di file export.');
+        $this->assertSame('Ya', $baris[5]);
+    }
 }
