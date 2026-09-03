@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\SummaryKunjunganExport;
 use App\Models\Kantor;
 use App\Models\Kunjungan;
 use App\Models\Poi;
@@ -12,6 +13,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * "Laporan" hub — Riwayat Kunjungan (KunjunganController::index), Rekap Sales
@@ -445,6 +448,19 @@ class LaporanController extends Controller
 
     public function summaryKunjungan(Request $request): View
     {
+        return view('laporan.summary-kunjungan', $this->summaryKunjunganData($request));
+    }
+
+    /**
+     * The Summary Kunjungan table, shared by the screen and its Excel export
+     * so the two can't drift — same kantor scope, same date window, and the
+     * same derived Total Kunjungan / %-Tase Closing, computed once here rather
+     * than once in Blade and again in the exporter.
+     *
+     * @return array<string, mixed>
+     */
+    private function summaryKunjunganData(Request $request): array
+    {
         $user = $request->user();
         $kantorScope = $this->resolveKantorScope($user, $request);
         [$dari, $sampai] = $this->summaryPeriode($request);
@@ -509,12 +525,44 @@ class LaporanController extends Controller
             ['jumlah_sales' => $salesIdsPerKantor],
         );
 
-        return view('laporan.summary-kunjungan', [
+        foreach ($rows as $i => $row) {
+            $totalKunjungan = 0;
+            foreach (self::FUNNEL_STAGES as $stage) {
+                $totalKunjungan += $row['values'][$stage] ?? 0;
+            }
+            $closing = $row['values'][Kunjungan::HASIL_CLOSING] ?? 0;
+            $poi = $row['values']['jumlah_poi'] ?? 0;
+
+            $rows[$i]['values']['total_kunjungan'] = $totalKunjungan;
+            // Basis sengaja Jumlah POI (bukan total kunjungan) — ikut rumus di
+            // file sumbernya: "berapa persen POI yang sudah closing". null
+            // (bukan 0) kalau Cabang-nya belum punya POI sama sekali, supaya
+            // "belum bisa dihitung" tidak terbaca sebagai "0%".
+            $rows[$i]['values']['persen_closing'] = $poi > 0 ? round($closing / $poi * 100, 2) : null;
+        }
+
+        return [
             'rows' => $rows,
             'stages' => self::FUNNEL_STAGES,
             'dari' => $dari,
             'sampai' => $sampai,
-        ] + $this->summaryFilterViewData($kantorScope));
+        ] + $this->summaryFilterViewData($kantorScope);
+    }
+
+    /**
+     * Same table as the screen, as .xlsx. Goes through summaryKunjunganData()
+     * so the file always carries whatever filters the user was looking at.
+     */
+    public function exportSummaryKunjungan(Request $request): BinaryFileResponse
+    {
+        $data = $this->summaryKunjunganData($request);
+
+        $nama = 'Summary_Kunjungan_'.$data['dari'].'_sd_'.$data['sampai'].'.xlsx';
+
+        return Excel::download(
+            new SummaryKunjunganExport($data['rows'], $data['stages'], $data['dari'], $data['sampai']),
+            $nama,
+        );
     }
 
     public function summaryProduk(Request $request): View

@@ -10,6 +10,7 @@ use App\Models\User;
 use Database\Factories\PoiFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
 
 /**
@@ -351,5 +352,125 @@ class SummaryLaporanTest extends TestCase
         $sales = $this->salesFor($mine);
         $this->actingAs($sales)->get('/laporan/summary-kunjungan')->assertForbidden();
         $this->actingAs($sales)->get('/laporan/summary-produk')->assertForbidden();
+    }
+
+    // ---------------- Export Excel Summary Kunjungan (2026-09-03) ----------------
+
+    /**
+     * Reads the exported sheet back as [heading => value] rows keyed by the
+     * Report Sales label, skipping the period caption in row 1.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function sheetFrom($response): array
+    {
+        $path = $response->baseResponse->getFile()->getPathname();
+        $raw = IOFactory::load($path)->getActiveSheet()->toArray();
+
+        $head = $raw[1];
+        $out = [];
+        foreach (array_slice($raw, 2) as $baris) {
+            if (($baris[1] ?? null) === null || $baris[1] === '') {
+                continue;
+            }
+            $out[$baris[1]] = array_combine($head, $baris);
+        }
+
+        return $out;
+    }
+
+    public function test_export_carries_the_same_numbers_the_screen_shows(): void
+    {
+        $kantor = $this->kantor('K1', 'Cabang Satu', 'AREA SATU', 'CLUSTER A');
+        $sales = $this->salesFor($kantor);
+        $this->visit($kantor, $sales, Kunjungan::HASIL_CLOSING, '2026-03-05');
+        $this->visit($kantor, $sales, Kunjungan::HASIL_CLOSING, '2026-03-06');
+        $this->visit($kantor, $sales, Kunjungan::HASIL_BERMINAT, '2026-03-07');
+
+        $admin = $this->admin();
+        $q = '?dari=2026-03-01&sampai=2026-03-31';
+
+        $layar = $this->rowFor(
+            $this->rowsFrom($this->actingAs($admin)->get('/laporan/summary-kunjungan'.$q)),
+            'Cabang Satu',
+        );
+
+        $response = $this->actingAs($admin)->get('/laporan/summary-kunjungan/export'.$q);
+        $response->assertOk();
+        $sheet = $this->sheetFrom($response);
+
+        $this->assertArrayHasKey('Cabang Satu', $sheet);
+        $baris = $sheet['Cabang Satu'];
+
+        $this->assertSame('Cabang', $baris['Level']);
+        $this->assertEquals($layar['values']['jumlah_poi'], $baris['Jumlah POI']);
+        $this->assertEquals($layar['values']['jumlah_sales'], $baris['Jumlah Sales']);
+        $this->assertEquals($layar['values']['total_kunjungan'], $baris['Total Kunjungan']);
+        $this->assertEquals($layar['values']['persen_closing'], $baris['%-Tase Closing']);
+        $this->assertEquals(3, $baris['Total Kunjungan']);
+    }
+
+    /**
+     * The sheet interleaves Cabang rows with Area/Cluster subtotals and a
+     * grand TOTAL. Without a Level column, summing a column in Excel silently
+     * counts every figure about four times over.
+     */
+    public function test_export_labels_which_rows_are_subtotals(): void
+    {
+        $kantor = $this->kantor('K1', 'Cabang Satu', 'AREA SATU', 'CLUSTER A');
+        $sales = $this->salesFor($kantor);
+        $this->visit($kantor, $sales, Kunjungan::HASIL_CLOSING, '2026-03-05');
+
+        $response = $this->actingAs($this->admin())
+            ->get('/laporan/summary-kunjungan/export?dari=2026-03-01&sampai=2026-03-31');
+        $sheet = $this->sheetFrom($response);
+
+        $this->assertSame('Area', $sheet['AREA SATU']['Level']);
+        $this->assertSame('Cabang-Cluster', $sheet['CLUSTER A']['Level']);
+        $this->assertSame('Cabang', $sheet['Cabang Satu']['Level']);
+        $this->assertSame('TOTAL', $sheet['TOTAL']['Level']);
+    }
+
+    public function test_export_respects_the_date_filter_and_names_the_period(): void
+    {
+        $kantor = $this->kantor('K1', 'Cabang Satu', 'AREA SATU', 'CLUSTER A');
+        $sales = $this->salesFor($kantor);
+        $this->visit($kantor, $sales, Kunjungan::HASIL_CLOSING, '2026-03-05');
+        // Outside the window below — must not be counted.
+        $this->visit($kantor, $sales, Kunjungan::HASIL_CLOSING, '2026-05-05');
+
+        $response = $this->actingAs($this->admin())
+            ->get('/laporan/summary-kunjungan/export?dari=2026-03-01&sampai=2026-03-31');
+
+        $raw = IOFactory::load($response->baseResponse->getFile()->getPathname())
+            ->getActiveSheet()->toArray();
+
+        $this->assertSame('Periode 2026-03-01 s/d 2026-03-31', $raw[0][0]);
+        $this->assertEquals(1, $this->sheetFrom($response)['TOTAL']['Total Kunjungan']);
+    }
+
+    public function test_export_is_scoped_for_admin_final_and_blocked_for_sales(): void
+    {
+        $mine = $this->kantor('MINE', 'Cabang Saya', 'AREA SATU', 'CLUSTER A');
+        $other = $this->kantor('OTHER', 'Cabang Lain', 'AREA DUA', 'CLUSTER B');
+        $sales = $this->salesFor($mine, $other);
+        $this->visit($mine, $sales, Kunjungan::HASIL_CLOSING, '2026-03-05');
+        $this->visit($other, $sales, Kunjungan::HASIL_CLOSING, '2026-03-05');
+
+        $unit = Unit::firstOrCreate(['nama' => 'SALES'], ['is_active' => true]);
+        $adminFinal = User::factory()->adminFinal()->create(['force_password_change' => false, 'unit_id' => $unit->id]);
+        $adminFinal->kantor()->attach($mine->id);
+
+        $sheet = $this->sheetFrom(
+            $this->actingAs($adminFinal)->get('/laporan/summary-kunjungan/export?dari=2026-03-01&sampai=2026-03-31')
+        );
+        $this->assertArrayHasKey('Cabang Saya', $sheet);
+        $this->assertArrayNotHasKey('Cabang Lain', $sheet);
+
+        // A sales holding two Cabang gets the active-kantor chooser first, so
+        // the role check is asserted on a single-Cabang sales instead.
+        $this->actingAs($this->salesFor($mine))
+            ->get('/laporan/summary-kunjungan/export')
+            ->assertForbidden();
     }
 }

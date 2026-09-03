@@ -12,9 +12,19 @@
     <div class="table-panel">
       <div class="panel-head">
         <h3>Summary Kunjungan per Cabang</h3>
-        <span class="badge" style="background:var(--brand-50);color:var(--brand-700)">
-          {{ \Carbon\Carbon::parse($dari)->format('d M Y') }} &ndash; {{ \Carbon\Carbon::parse($sampai)->format('d M Y') }}
-        </span>
+        <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
+          <span class="badge" style="background:var(--brand-50);color:var(--brand-700)">
+            {{ \Carbon\Carbon::parse($dari)->format('d M Y') }} &ndash; {{ \Carbon\Carbon::parse($sampai)->format('d M Y') }}
+          </span>
+          @if (count($rows) > 1)
+            {{-- request()->query() so the file carries whatever filter the user
+                 is currently looking at, chip pickers included. --}}
+            <a href="{{ route('laporan.summary-kunjungan.export', request()->query()) }}"
+               class="btn-primary-custom" style="text-decoration:none;padding:8px 16px;width:auto;font-size:12.5px;white-space:nowrap">
+              <i class="bi bi-file-earmark-excel"></i> Export Excel
+            </a>
+          @endif
+        </div>
       </div>
 
       @if (count($rows) <= 1)
@@ -46,14 +56,13 @@
             </thead>
             <tbody>
               @foreach ($rows as $row)
+                {{-- Total Kunjungan & %-Tase Closing dihitung di
+                     LaporanController::summaryKunjunganData() supaya layar dan
+                     file Excel-nya tidak mungkin beda angka. --}}
                 @php
-                  $totalKunjungan = 0;
-                  foreach ($stages as $s) { $totalKunjungan += $row['values'][$s] ?? 0; }
-                  $closing = $row['values'][\App\Models\Kunjungan::HASIL_CLOSING] ?? 0;
+                  $totalKunjungan = $row['values']['total_kunjungan'] ?? 0;
                   $poi = $row['values']['jumlah_poi'] ?? 0;
-                  // Basis sengaja Jumlah POI (bukan total kunjungan) — ikut rumus
-                  // di file sumbernya: "berapa persen POI yang sudah closing".
-                  $persen = $poi > 0 ? round($closing / $poi * 100, 2) : null;
+                  $persen = $row['values']['persen_closing'] ?? null;
                 @endphp
                 <tr class="row-{{ $row['level'] }}">
                   <td class="cell-heading">{{ $row['label'] }}</td>
