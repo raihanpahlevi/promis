@@ -973,4 +973,91 @@ class KunjunganTest extends TestCase
         $html = $this->actingAs($adminFinal)->get('/kunjungan')->assertOk()->getContent();
         $this->assertStringNotContainsString('/kunjungan/'.$kunjungan->id.'"', $html);
     }
+
+    // --- kolom Visit (2026-09-04) ---------------------------------------
+
+    /** @return array<int, int> */
+    private function visitKeFrom($response): array
+    {
+        return $response->viewData('visitKe');
+    }
+
+    private function adminUser(): User
+    {
+        return User::factory()->admin()->create(['force_password_change' => false]);
+    }
+
+    public function test_visit_numbers_each_sales_own_visits_to_a_poi_in_order(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $andi = $this->sales($kantor);
+        $budi = $this->sales($kantor);
+        $poi = $this->poi(['kantor_id' => $kantor->id, 'status' => 'aktif']);
+
+        $a1 = Kunjungan::create(['poi_id' => $poi->id, 'sales_id' => $andi->id, 'tanggal_kunjungan' => '2026-03-05', 'hasil' => Kunjungan::HASIL_BELUM_BERTEMU]);
+        $b1 = Kunjungan::create(['poi_id' => $poi->id, 'sales_id' => $budi->id, 'tanggal_kunjungan' => '2026-03-12', 'hasil' => Kunjungan::HASIL_BERMINAT]);
+        $a2 = Kunjungan::create(['poi_id' => $poi->id, 'sales_id' => $andi->id, 'tanggal_kunjungan' => '2026-03-20', 'hasil' => Kunjungan::HASIL_CLOSING]);
+
+        $visit = $this->visitKeFrom($this->actingAs($this->adminUser())->get('/kunjungan'));
+
+        // Per POI *per sales*: Budi's single visit is his first, not the POI's second.
+        $this->assertSame(1, $visit[$a1->id]);
+        $this->assertSame(1, $visit[$b1->id]);
+        $this->assertSame(2, $visit[$a2->id]);
+    }
+
+    public function test_visit_number_is_a_sequence_not_a_running_total(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $sales = $this->sales($kantor);
+        $poi = $this->poi(['kantor_id' => $kantor->id, 'status' => 'aktif']);
+
+        $ids = [];
+        foreach (['2026-03-01', '2026-03-02', '2026-03-03'] as $tanggal) {
+            $ids[] = Kunjungan::create(['poi_id' => $poi->id, 'sales_id' => $sales->id, 'tanggal_kunjungan' => $tanggal, 'hasil' => Kunjungan::HASIL_BERMINAT])->id;
+        }
+
+        $visit = $this->visitKeFrom($this->actingAs($this->adminUser())->get('/kunjungan'));
+
+        $this->assertSame([1, 2, 3], array_map(fn ($id) => $visit[$id], $ids));
+    }
+
+    /**
+     * The number belongs to the visit, not to the filter. Narrowing the page
+     * to one month must not relabel a third visit as a first — that would turn
+     * a follow-up into a fresh approach on screen.
+     */
+    public function test_visit_number_ignores_the_date_filter(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $sales = $this->sales($kantor);
+        $poi = $this->poi(['kantor_id' => $kantor->id, 'status' => 'aktif']);
+
+        Kunjungan::create(['poi_id' => $poi->id, 'sales_id' => $sales->id, 'tanggal_kunjungan' => '2026-01-10', 'hasil' => Kunjungan::HASIL_BELUM_BERTEMU]);
+        Kunjungan::create(['poi_id' => $poi->id, 'sales_id' => $sales->id, 'tanggal_kunjungan' => '2026-02-10', 'hasil' => Kunjungan::HASIL_BERMINAT]);
+        $ketiga = Kunjungan::create(['poi_id' => $poi->id, 'sales_id' => $sales->id, 'tanggal_kunjungan' => '2026-03-10', 'hasil' => Kunjungan::HASIL_CLOSING]);
+
+        $visit = $this->visitKeFrom(
+            $this->actingAs($this->adminUser())->get('/kunjungan?dari=2026-03-01&sampai=2026-03-31')
+        );
+
+        $this->assertSame(3, $visit[$ketiga->id]);
+    }
+
+    public function test_visits_to_different_poi_are_counted_separately(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $sales = $this->sales($kantor);
+        $abc = $this->poi(['kantor_id' => $kantor->id, 'status' => 'aktif']);
+        $xyz = $this->poi(['kantor_id' => $kantor->id, 'status' => 'aktif']);
+
+        Kunjungan::create(['poi_id' => $abc->id, 'sales_id' => $sales->id, 'tanggal_kunjungan' => '2026-03-01', 'hasil' => Kunjungan::HASIL_BERMINAT]);
+        $abc2 = Kunjungan::create(['poi_id' => $abc->id, 'sales_id' => $sales->id, 'tanggal_kunjungan' => '2026-03-02', 'hasil' => Kunjungan::HASIL_BERMINAT]);
+        $xyz1 = Kunjungan::create(['poi_id' => $xyz->id, 'sales_id' => $sales->id, 'tanggal_kunjungan' => '2026-03-03', 'hasil' => Kunjungan::HASIL_BERMINAT]);
+
+        $visit = $this->visitKeFrom($this->actingAs($this->adminUser())->get('/kunjungan'));
+
+        $this->assertSame(2, $visit[$abc2->id]);
+        $this->assertSame(1, $visit[$xyz1->id], 'POI lain harus mulai dari 1 lagi.');
+    }
 }

@@ -183,6 +183,13 @@
                       <span>{{ $unitRow['nama'] }}</span>
                       <span><strong>{{ $unitRow['visit'] }}</strong> visit <span class="text-muted">({{ $unitRow['closing'] }} closing)</span></span>
                     </div>
+                    {{-- Siapa saja di balik angka unit di atas. --}}
+                    @foreach ($unitRow['orang'] as $orang)
+                      <div class="breakdown-card-row breakdown-card-sub">
+                        <span>{{ $orang['nama'] }}</span>
+                        <span>{{ $orang['visit'] }} visit <span class="text-muted">({{ $orang['closing'] }} closing)</span></span>
+                      </div>
+                    @endforeach
                   @endforeach
                 </div>
               </div>
@@ -209,6 +216,11 @@
                       <span>{{ $unitRow['nama'] }}</span>
                       <strong>{{ $unitRow['jumlah'] }}</strong>
                     </div>
+                    @foreach ($unitRow['orang'] as $orang)
+                      <div class="breakdown-card-row breakdown-card-sub">
+                        <span>{{ $orang['nama'] }}</span>
+                      </div>
+                    @endforeach
                   @endforeach
                 </div>
               </div>

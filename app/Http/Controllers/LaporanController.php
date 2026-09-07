@@ -273,14 +273,21 @@ class LaporanController extends Controller
                 }
 
                 $buckets[$kantor->id]['kantor'] ??= $kantor;
-                $buckets[$kantor->id]['units'][$unitLabel] = ($buckets[$kantor->id]['units'][$unitLabel] ?? 0) + 1;
+                $buckets[$kantor->id]['units'][$unitLabel]['jumlah'] = ($buckets[$kantor->id]['units'][$unitLabel]['jumlah'] ?? 0) + 1;
+                // Naming them is the whole point here: "3 orang belum
+                // berkunjung" is not actionable until you know which 3.
+                $buckets[$kantor->id]['units'][$unitLabel]['orang'][] = ['nama' => $u->nama_lengkap];
             }
         }
 
         return collect($buckets)
             ->map(function (array $bucket): array {
                 $units = collect($bucket['units'])
-                    ->map(fn (int $jumlah, string $nama) => ['nama' => $nama, 'jumlah' => $jumlah])
+                    ->map(fn (array $counts, string $nama) => [
+                        'nama' => $nama,
+                        'jumlah' => $counts['jumlah'],
+                        'orang' => collect($counts['orang'] ?? [])->sortBy('nama')->values(),
+                    ])
                     ->sortByDesc('jumlah')
                     ->values();
 
@@ -323,13 +330,25 @@ class LaporanController extends Controller
                 $buckets[$kantor->id]['kantor'] ??= $kantor;
                 $buckets[$kantor->id]['units'][$unitLabel]['visit'] = ($buckets[$kantor->id]['units'][$unitLabel]['visit'] ?? 0) + $u->total_visit;
                 $buckets[$kantor->id]['units'][$unitLabel]['closing'] = ($buckets[$kantor->id]['units'][$unitLabel]['closing'] ?? 0) + $u->total_closing;
+                // Who the unit total is actually made of — a unit line alone
+                // says a jabatan did 40 visits without saying by whom.
+                $buckets[$kantor->id]['units'][$unitLabel]['orang'][] = [
+                    'nama' => $u->nama_lengkap,
+                    'visit' => (int) $u->total_visit,
+                    'closing' => (int) $u->total_closing,
+                ];
             }
         }
 
         return collect($buckets)
             ->map(function (array $bucket): array {
                 $units = collect($bucket['units'])
-                    ->map(fn (array $counts, string $nama) => ['nama' => $nama, 'visit' => $counts['visit'], 'closing' => $counts['closing']])
+                    ->map(fn (array $counts, string $nama) => [
+                        'nama' => $nama,
+                        'visit' => $counts['visit'],
+                        'closing' => $counts['closing'],
+                        'orang' => collect($counts['orang'] ?? [])->sortByDesc('visit')->values(),
+                    ])
                     ->sortByDesc('visit')
                     ->values();
 

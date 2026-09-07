@@ -103,6 +103,7 @@
               <th>PIC</th>
               <th>Sales</th>
               <th>Produk</th>
+              <th class="num">Visit</th>
               <th>Hasil</th>
               <th>Norek/CIF</th>
               <th class="num" style="text-align:right">Nominal</th>
@@ -123,6 +124,8 @@
                 <td>{{ $k->poi->pic ?? '-' }}</td>
                 <td>{{ $k->sales->nama_lengkap ?? '-' }}</td>
                 <td>{{ $k->produkList->pluck('produk')->implode(', ') ?: '-' }}</td>
+                {{-- Kunjungan ke-berapa sales ini ke POI ini (bukan total). --}}
+                <td data-label="Visit" class="num">{{ $visitKe[$k->id] ?? '-' }}</td>
                 <td><span class="badge {{ $k->hasilBadgeClass() }}">{{ $k->hasil }}</span></td>
                 <td>{{ $k->norek_cif ?? '-' }}</td>
                 <td class="num" style="text-align:right">{{ $k->nominal !== null ? 'Rp '.number_format((float) $k->nominal, 0, ',', '.') : '-' }}</td>

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\NarrowsKantorByAreaCluster;
 use App\Models\Kantor;
 use App\Models\Kunjungan;
 use App\Models\KunjunganProduk;
@@ -12,6 +13,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -19,9 +21,51 @@ use Illuminate\Validation\ValidationException;
 
 class KunjunganController extends Controller
 {
-    use \App\Http\Controllers\Concerns\NarrowsKantorByAreaCluster;
+    use NarrowsKantorByAreaCluster;
 
     private const PER_PAGE = 15;
+
+    /**
+     * "Visit ke berapa" for each row on the page: the position of this visit
+     * among that sales' own visits to that POI, oldest first — visit 1, 2, 3,
+     * never a running total.
+     *
+     * Counted over the POI's whole history on purpose, NOT within the active
+     * date/hasil filter. The number is a fact about the visit itself, so
+     * narrowing the page to March has to keep showing the third visit as 3;
+     * recounting inside the filter would relabel it 1 and quietly turn a
+     * follow-up into a first approach.
+     *
+     * @param  Collection<int, Kunjungan>  $rows
+     * @return array<int, int> kunjungan id => visit number
+     */
+    private function visitKe(Collection $rows): array
+    {
+        if ($rows->isEmpty()) {
+            return [];
+        }
+
+        // One query for the whole page rather than one per row. The pair
+        // filter is a cross product (every listed POI against every listed
+        // sales), so it can pull a few rows belonging to neither pairing on
+        // the page — harmless, since the counter below is keyed on the exact
+        // POI+sales pair and those extras simply never get read.
+        $riwayat = Kunjungan::query()
+            ->whereIn('poi_id', $rows->pluck('poi_id')->unique()->all())
+            ->whereIn('sales_id', $rows->pluck('sales_id')->unique()->all())
+            ->orderBy('tanggal_kunjungan')
+            ->orderBy('id')
+            ->get(['id', 'poi_id', 'sales_id']);
+
+        $nomor = [];
+        $hasil = [];
+        foreach ($riwayat as $k) {
+            $pasangan = $k->poi_id.'-'.$k->sales_id;
+            $hasil[$k->id] = $nomor[$pasangan] = ($nomor[$pasangan] ?? 0) + 1;
+        }
+
+        return $hasil;
+    }
 
     /**
      * Visit-logging form — sales and admin_final only (confirmed against the real v1
@@ -487,6 +531,7 @@ class KunjunganController extends Controller
 
         return view('kunjungan.index', [
             'kunjungans' => $kunjungans,
+            'visitKe' => $this->visitKe($kunjungans->getCollection()),
             'hasilOptions' => Kunjungan::HASIL_OPTIONS,
             'kantorOptions' => $kantorOptions,
             'kantorAreaOptions' => $narrowed['areaOptions'],

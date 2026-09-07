@@ -446,4 +446,60 @@ class RekapSalesTest extends TestCase
         $this->assertSame(0, $summary['kantor_aktif']);
         $this->assertSame(1, $summary['total_kantor']);
     }
+
+    // --- nama sales di ringkasan per Kantor & Unit (2026-09-04) ---
+
+    /**
+     * The per-Kantor cards used to show only the unit (jabatan) and its
+     * totals, so "BTRM 5 visit" gave no way to tell who did the visiting.
+     * The names now sit under each unit line, and their figures must add up
+     * to the unit total above them.
+     */
+    public function test_kunjungan_summary_names_the_people_behind_each_unit_total(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $unit = Unit::create(['nama' => 'BTRM', 'is_active' => true]);
+        $andi = $this->salesUser($kantor, $unit, ['nama_lengkap' => 'Andi Pratama']);
+        $budi = $this->salesUser($kantor, $unit, ['nama_lengkap' => 'Budi Santoso']);
+
+        $poi = $this->poi($kantor, ['status' => 'aktif']);
+        foreach ([[$andi, Kunjungan::HASIL_CLOSING], [$andi, Kunjungan::HASIL_BERMINAT], [$budi, Kunjungan::HASIL_CLOSING]] as [$user, $hasil]) {
+            Kunjungan::create(['poi_id' => $poi->id, 'sales_id' => $user->id, 'tanggal_kunjungan' => '2026-03-05', 'hasil' => $hasil]);
+        }
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $response = $this->actingAs($admin)->get('/laporan/rekap-sales?dari=2026-03-01&sampai=2026-03-31');
+        $response->assertOk();
+
+        $unitRow = $response->viewData('kunjunganSummary')->first()['units']->firstWhere('nama', 'BTRM');
+
+        $this->assertSame(3, $unitRow['visit']);
+        $this->assertSame(
+            ['Andi Pratama', 'Budi Santoso'],
+            $unitRow['orang']->pluck('nama')->sort()->values()->all(),
+        );
+        $this->assertSame($unitRow['visit'], $unitRow['orang']->sum('visit'), 'Jumlah per orang harus sama dengan total unit.');
+        $this->assertSame($unitRow['closing'], $unitRow['orang']->sum('closing'));
+
+        $response->assertSee('Andi Pratama', false);
+        $response->assertSee('Budi Santoso', false);
+    }
+
+    public function test_tidak_kunjungan_summary_names_who_has_not_visited(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $unit = Unit::create(['nama' => 'BTRM', 'is_active' => true]);
+        $this->salesUser($kantor, $unit, ['nama_lengkap' => 'Citra Dewi']);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $response = $this->actingAs($admin)
+            ->get('/laporan/rekap-sales?mode=tidak&dari=2026-03-01&sampai=2026-03-31');
+        $response->assertOk();
+
+        $unitRow = $response->viewData('tidakSummary')->first()['units']->firstWhere('nama', 'BTRM');
+
+        $this->assertSame(1, $unitRow['jumlah']);
+        $this->assertSame(['Citra Dewi'], $unitRow['orang']->pluck('nama')->all());
+        $response->assertSee('Citra Dewi', false);
+    }
 }
