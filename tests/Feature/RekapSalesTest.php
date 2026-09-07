@@ -502,4 +502,53 @@ class RekapSalesTest extends TestCase
         $this->assertSame(['Citra Dewi'], $unitRow['orang']->pluck('nama')->all());
         $response->assertSee('Citra Dewi', false);
     }
+
+    /**
+     * "Belum Kunjungan" is a number of people, and a sales can be attached to
+     * several Cabang. Adding up the per-Cabang figures counted the same person
+     * once per Cabang — on production that reported 3,771 where 659 people
+     * existed, a headline larger than the entire user table.
+     */
+    public function test_belum_kunjungan_counts_a_sales_once_however_many_cabang_they_hold(): void
+    {
+        $a = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $b = Kantor::create(['kode' => 'B', 'nama' => 'Kantor B']);
+        $c = Kantor::create(['kode' => 'C', 'nama' => 'Kantor C']);
+        $unit = Unit::create(['nama' => 'BTRM', 'is_active' => true]);
+
+        // One person, three Cabang, no visit anywhere: still one person.
+        $keliling = $this->salesUser($a, $unit, ['nama_lengkap' => 'Sales Keliling']);
+        $keliling->kantor()->attach([$b->id, $c->id]);
+
+        $this->salesUser($b, $unit, ['nama_lengkap' => 'Sales Diam']);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $response = $this->actingAs($admin)->get('/laporan/rekap-sales?dari=2026-03-01&sampai=2026-03-31');
+
+        $summary = $response->viewData('histogram')['summary'];
+        $this->assertSame(2, $summary['total_tidak'], 'Sales dengan 3 Cabang tidak boleh dihitung 3 kali.');
+    }
+
+    public function test_belum_kunjungan_drops_someone_who_visited_in_range(): void
+    {
+        $a = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $b = Kantor::create(['kode' => 'B', 'nama' => 'Kantor B']);
+        $unit = Unit::create(['nama' => 'BTRM', 'is_active' => true]);
+
+        $rajin = $this->salesUser($a, $unit, ['nama_lengkap' => 'Sales Rajin']);
+        $rajin->kantor()->attach($b->id);
+        $this->salesUser($b, $unit, ['nama_lengkap' => 'Sales Diam']);
+
+        $poi = $this->poi($a, ['status' => 'aktif']);
+        Kunjungan::create(['poi_id' => $poi->id, 'sales_id' => $rajin->id, 'tanggal_kunjungan' => '2026-03-05', 'hasil' => Kunjungan::HASIL_CLOSING]);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+        $summary = $this->actingAs($admin)
+            ->get('/laporan/rekap-sales?dari=2026-03-01&sampai=2026-03-31')
+            ->viewData('histogram')['summary'];
+
+        // One visit in one of his Cabang clears him everywhere.
+        $this->assertSame(1, $summary['total_tidak']);
+        $this->assertSame(1, $summary['total_kunjungan']);
+    }
 }

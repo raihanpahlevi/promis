@@ -393,7 +393,6 @@ class LaporanController extends Controller
         $labels2 = $kunj2 = $tidak2 = $closing2 = [];
 
         $totalKunjunganSum = 0;
-        $totalTidakSum = 0;
         $kantorAktif = 0;
 
         foreach ($kantorList as $kantor) {
@@ -427,12 +426,23 @@ class LaporanController extends Controller
             $closing2[] = $totalClosingKantor;
 
             $totalKunjunganSum += $totalKunj;
-            $totalTidakSum += $totalTidakKantor;
 
             if ($totalKunj > 0) {
                 $kantorAktif++;
             }
         }
+
+        // Counted once over the whole scope, NOT by adding up the per-kantor
+        // figures above: a sales can hold several Cabang, so summing them
+        // counts the same person once per Cabang they're attached to (on the
+        // real data that turned 659 people into 3,771). The bars keep their
+        // per-kantor counts — those are legitimately per-Cabang; it's only the
+        // headline, which claims to be a number of people, that has to union.
+        // Same rule buildKantorHierarchy() already follows for Jumlah Sales.
+        $totalTidakSum = $this->relevantUserQuery($unitId)
+            ->whereHas('kantor', fn ($q) => $q->whereIn('kantor.id', $kantorList->pluck('id')->all()))
+            ->whereDoesntHave('kunjungan', fn ($q) => $q->whereBetween('tanggal_kunjungan', [$dari, $sampai]))
+            ->count();
 
         return [
             'labels' => $labels, 'kunjungan' => $kunj, 'closing' => $closing, 'marker' => $marker,
