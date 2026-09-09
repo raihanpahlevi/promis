@@ -98,6 +98,7 @@
           <thead>
             <tr>
               <th>Tanggal</th>
+              <th>Jam Input</th>
               <th>Kantor</th>
               <th>POI</th>
               <th>PIC</th>
@@ -119,6 +120,10 @@
               @endphp
               <tr>
                 <td>{{ $k->tanggal_kunjungan->format('d/m/Y') }}</td>
+                {{-- Waktu barisnya dibuat, bukan jam kunjungannya — kunjungan
+                     bisa diinput di hari yang berbeda, jadi tanggal input ikut
+                     ditaruh di tooltip supaya selisihnya tetap kelihatan. --}}
+                <td data-label="Jam Input" title="Diinput {{ $k->created_at?->format('d/m/Y H:i') ?? '-' }}">{{ $k->created_at?->format('H:i') ?? '-' }}</td>
                 <td>{{ $k->poi->kantor->nama ?? '-' }}</td>
                 <td>{{ $k->poi->nama_poi ?? '-' }}</td>
                 <td>{{ $k->poi->pic ?? '-' }}</td>

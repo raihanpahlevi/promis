@@ -10,5 +10,7 @@ Route::middleware('role:admin,admin_final')->group(function () {
 
     // Export sits behind the same role gate as the report itself — it carries
     // exactly the rows that report just showed, nothing wider.
+    Route::get('/laporan/rekap-sales/export', [LaporanController::class, 'exportRekapSales'])->name('laporan.rekap-sales.export');
     Route::get('/laporan/summary-kunjungan/export', [LaporanController::class, 'exportSummaryKunjungan'])->name('laporan.summary-kunjungan.export');
+    Route::get('/laporan/summary-produk/export', [LaporanController::class, 'exportSummaryProduk'])->name('laporan.summary-produk.export');
 });

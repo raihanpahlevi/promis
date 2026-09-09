@@ -12,9 +12,17 @@
     <div class="table-panel">
       <div class="panel-head">
         <h3>Summary Produk Closing per Cabang</h3>
-        <span class="badge" style="background:var(--brand-50);color:var(--brand-700)">
-          {{ \Carbon\Carbon::parse($dari)->format('d M Y') }} &ndash; {{ \Carbon\Carbon::parse($sampai)->format('d M Y') }}
-        </span>
+        <div style="display:flex;align-items:center;gap:10px;margin-left:auto">
+          <span class="badge" style="background:var(--brand-50);color:var(--brand-700)">
+            {{ \Carbon\Carbon::parse($dari)->format('d M Y') }} &ndash; {{ \Carbon\Carbon::parse($sampai)->format('d M Y') }}
+          </span>
+          @if (count($rows) > 1)
+            <a href="{{ route('laporan.summary-produk.export', request()->query()) }}"
+               class="btn-primary-custom" style="text-decoration:none;padding:8px 16px;width:auto;font-size:12.5px;white-space:nowrap">
+              <i class="bi bi-file-earmark-excel"></i> Export Excel
+            </a>
+          @endif
+        </div>
       </div>
 
       @if (count($rows) <= 1)

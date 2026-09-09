@@ -63,7 +63,9 @@
                 </div>
               </div>
             @endif
-            <div class="kantor-monitor-actions" style="display:flex;align-items:center;gap:10px;margin-left:auto;padding-top:2px">
+            {{-- align-self:flex-end — the button sits level with the Cabang
+                 search box at the bottom of the row, not up beside its label. --}}
+            <div class="kantor-monitor-actions" style="display:flex;align-items:center;gap:10px;margin-left:auto;align-self:flex-end">
               <button type="submit" class="btn-primary-custom" style="width:auto;padding:8px 18px;font-size:12.5px">Terapkan</button>
               @if ($selectedKantorIds !== [] || $selectedClusters !== [] || $selectedArea !== null)
                 <a href="{{ route('dashboard', array_filter(['periode' => $periode])) }}" style="font-size:12px;color:var(--brand-500);text-decoration:none">Reset</a>
@@ -187,7 +189,7 @@
       <div class="panel-head" style="flex-wrap:wrap;gap:8px">
         <h3>Hasil Kunjungan Sales</h3>
         <div class="periode-tabs">
-          @foreach (['day' => 'Day', 'week' => 'Week', 'month' => 'Month'] as $val => $lbl)
+          @foreach (['day' => 'Day', 'week' => 'Week', 'month' => 'Month', 'all' => 'All'] as $val => $lbl)
             <a href="{{ route('dashboard', array_filter(['kantor' => $selectedKantorIds, 'periode' => $val])) }}"
                class="{{ $periode === $val ? 'active' : '' }}">{{ $lbl }}</a>
           @endforeach

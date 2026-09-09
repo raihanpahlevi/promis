@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\RekapSalesExport;
 use App\Exports\SummaryKunjunganExport;
+use App\Exports\SummaryProdukExport;
 use App\Models\Kantor;
 use App\Models\Kunjungan;
 use App\Models\Poi;
@@ -596,6 +598,18 @@ class LaporanController extends Controller
 
     public function summaryProduk(Request $request): View
     {
+        return view('laporan.summary-produk', $this->summaryProdukData($request));
+    }
+
+    /**
+     * The Summary Produk table, shared by the screen and its Excel export —
+     * same reasoning as summaryKunjunganData(): one place builds the figures,
+     * including the derived Total, so the file can't drift from the page.
+     *
+     * @return array<string, mixed>
+     */
+    private function summaryProdukData(Request $request): array
+    {
         $user = $request->user();
         $kantorScope = $this->resolveKantorScope($user, $request);
         [$dari, $sampai] = $this->summaryPeriode($request);
@@ -630,12 +644,66 @@ class LaporanController extends Controller
 
         $rows = $this->buildKantorHierarchy($kantorList, $metrics, $produkList);
 
-        return view('laporan.summary-produk', [
+        foreach ($rows as $i => $row) {
+            $rows[$i]['values']['total_produk'] = array_sum(
+                array_intersect_key($row['values'], array_flip($produkList))
+            );
+        }
+
+        return [
             'rows' => $rows,
             'produkList' => $produkList,
             'dari' => $dari,
             'sampai' => $sampai,
-        ] + $this->summaryFilterViewData($kantorScope));
+        ] + $this->summaryFilterViewData($kantorScope);
+    }
+
+    /**
+     * Rekap Sales as .xlsx, whichever tab the page is on. Re-resolves the same
+     * scope and filters the report itself uses, so the file matches the screen
+     * rather than quietly widening to everything.
+     */
+    public function exportRekapSales(Request $request): BinaryFileResponse
+    {
+        $kantorScope = $this->resolveKantorScope($request->user(), $request);
+
+        $unitOptions = Unit::where('is_active', true)->orderBy('nama')->get();
+        $unitId = $request->filled('unit') ? (int) $request->input('unit') : null;
+        if ($unitId !== null && ! $unitOptions->contains('id', $unitId)) {
+            $unitId = null;
+        }
+
+        $dari = $request->filled('dari') ? $request->input('dari') : Carbon::today()->toDateString();
+        $sampai = $request->filled('sampai') ? $request->input('sampai') : Carbon::today()->toDateString();
+
+        $mode = $request->input('mode') === 'tidak'
+            ? RekapSalesExport::MODE_TIDAK
+            : RekapSalesExport::MODE_KUNJUNGAN;
+
+        $rows = $mode === RekapSalesExport::MODE_TIDAK
+            ? $this->tidakKunjunganRekap($kantorScope['kantorIds'], $unitId, $dari, $sampai)
+            : $this->kunjunganRekap($kantorScope['kantorIds'], $unitId, $dari, $sampai);
+
+        $nama = ($mode === RekapSalesExport::MODE_TIDAK ? 'Rekap_Belum_Kunjungan_' : 'Rekap_Kunjungan_')
+            .$dari.'_sd_'.$sampai.'.xlsx';
+
+        return Excel::download(
+            new RekapSalesExport($rows, $mode, $dari, $sampai, $unitId ? $unitOptions->firstWhere('id', $unitId)?->nama : null),
+            $nama,
+        );
+    }
+
+    /**
+     * Same table as the screen, as .xlsx.
+     */
+    public function exportSummaryProduk(Request $request): BinaryFileResponse
+    {
+        $data = $this->summaryProdukData($request);
+
+        return Excel::download(
+            new SummaryProdukExport($data['rows'], $data['produkList'], $data['dari'], $data['sampai']),
+            'Summary_Produk_'.$data['dari'].'_sd_'.$data['sampai'].'.xlsx',
+        );
     }
 
     /**

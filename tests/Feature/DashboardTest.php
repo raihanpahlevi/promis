@@ -449,4 +449,46 @@ class DashboardTest extends TestCase
             ->assertOk()
             ->assertSee('Ring 1 (0 - 1 Km)', false);
     }
+
+    // ---------------- Periode "All" (2026-09-09) ----------------
+
+    /**
+     * day/week/month all anchor on today, so a visit logged months ago falls
+     * out of every one of them and the funnel reads empty. "All" is the option
+     * that answers "everything ever recorded".
+     */
+    public function test_periode_all_covers_visits_outside_every_other_window(): void
+    {
+        $kantor = Kantor::create(['kode' => 'K1', 'nama' => 'Kantor Satu']);
+        $poi = $this->poi($kantor);
+        $sales = User::factory()->create(['force_password_change' => false]);
+        $sales->kantor()->attach($kantor->id);
+
+        Kunjungan::create([
+            'poi_id' => $poi->id,
+            'sales_id' => $sales->id,
+            // Far outside "45 hari terakhir", the widest of the other options.
+            'tanggal_kunjungan' => now()->subYears(2)->toDateString(),
+            'hasil' => Kunjungan::HASIL_CLOSING,
+        ]);
+
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+
+        $this->actingAs($admin)->get('/dashboard?periode=month')
+            ->assertViewHas('totalHasilKunjungan', 0);
+
+        $response = $this->actingAs($admin)->get('/dashboard?periode=all');
+        $response->assertOk();
+        $response->assertViewHas('periode', 'all');
+        $response->assertViewHas('totalHasilKunjungan', 1);
+    }
+
+    public function test_an_unknown_periode_still_falls_back_to_day(): void
+    {
+        Kantor::create(['kode' => 'K1', 'nama' => 'Kantor Satu']);
+        $admin = User::factory()->admin()->create(['force_password_change' => false]);
+
+        $this->actingAs($admin)->get('/dashboard?periode=sepanjang-masa')
+            ->assertViewHas('periode', 'day');
+    }
 }

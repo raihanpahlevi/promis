@@ -1060,4 +1060,33 @@ class KunjunganTest extends TestCase
         $this->assertSame(2, $visit[$abc2->id]);
         $this->assertSame(1, $visit[$xyz1->id], 'POI lain harus mulai dari 1 lagi.');
     }
+
+    /**
+     * The visit date and the moment it was typed in are different facts — a
+     * visit can be logged the next day — so the time is its own column rather
+     * than being appended to Tanggal, and the tooltip carries the full input
+     * date so a gap between the two is discoverable.
+     */
+    public function test_riwayat_shows_the_time_the_row_was_entered(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $sales = $this->sales($kantor);
+        $poi = $this->poi(['kantor_id' => $kantor->id, 'status' => 'aktif']);
+
+        $kunjungan = Kunjungan::create([
+            'poi_id' => $poi->id,
+            'sales_id' => $sales->id,
+            'tanggal_kunjungan' => '2026-03-05',
+            'hasil' => Kunjungan::HASIL_CLOSING,
+        ]);
+        // Entered two days after the visit itself.
+        $kunjungan->forceFill(['created_at' => '2026-03-07 14:32:00'])->saveQuietly();
+
+        $response = $this->actingAs($this->adminUser())->get('/kunjungan');
+
+        $response->assertOk();
+        $response->assertSee('Jam Input', false);
+        $response->assertSee('14:32', false);
+        $response->assertSee('Diinput 07/03/2026 14:32', false);
+    }
 }

@@ -69,7 +69,7 @@ class DashboardController extends Controller
         $ringJarak = $this->ringJarakUntukScope($kantorIds);
         $sektor = $this->cache->remember('sektor', $kantorIds, fn () => $this->sektorBreakdown($kantorIds));
 
-        $periode = in_array($request->input('periode'), ['day', 'week', 'month'], true)
+        $periode = in_array($request->input('periode'), ['day', 'week', 'month', 'all'], true)
             ? $request->input('periode')
             : 'day';
         [$start, $end] = $this->periodeRange($periode);
@@ -129,12 +129,12 @@ class DashboardController extends Controller
 
         return [
             'kantorIds' => [$activeId],
-            'kantorOptions' => new Collection(),
+            'kantorOptions' => new Collection,
             'selectedKantorIds' => [$activeId],
             'label' => optional($user->kantor->firstWhere('id', $activeId))->nama ?? 'Kantor Saya',
-            'areaOptions' => new Collection(),
+            'areaOptions' => new Collection,
             'selectedArea' => null,
-            'clusterOptions' => new Collection(),
+            'clusterOptions' => new Collection,
             'selectedClusters' => [],
         ];
     }
@@ -485,6 +485,13 @@ class DashboardController extends Controller
         return match ($periode) {
             'week' => [$now->copy()->startOfMonth(), $now->copy()->endOfMonth()],
             'month' => [$now->copy()->subDays(45)->startOfDay(), $now->copy()->endOfDay()],
+            // "All" = no period filter at all. Expressed as a window wide
+            // enough to hold every kunjungan rather than by making the four
+            // whereBetween() calls below conditional — same result, and the
+            // upper bound is deliberately far in the future so a backdated or
+            // mistyped future date still shows up here instead of silently
+            // vanishing from the one view that claims to show everything.
+            'all' => [Carbon::create(2000, 1, 1)->startOfDay(), Carbon::create(2100, 12, 31)->endOfDay()],
             default => [$now->copy()->startOfDay(), $now->copy()->endOfDay()],
         };
     }

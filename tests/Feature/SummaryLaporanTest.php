@@ -473,4 +473,51 @@ class SummaryLaporanTest extends TestCase
             ->get('/laporan/summary-kunjungan/export')
             ->assertForbidden();
     }
+
+    // ---------------- Export Excel Summary Produk (2026-09-09) ----------------
+
+    public function test_summary_produk_export_matches_the_screen(): void
+    {
+        $kantor = $this->kantor('K1', 'Cabang Satu', 'AREA SATU', 'CLUSTER A');
+        $sales = $this->salesFor($kantor);
+        $this->visit($kantor, $sales, Kunjungan::HASIL_CLOSING, '2026-03-05', ['Tabungan', 'Kartu Kredit']);
+        $this->visit($kantor, $sales, Kunjungan::HASIL_CLOSING, '2026-03-06', ['Tabungan']);
+        // Not a Closing — Summary Produk counts products from Closing only.
+        $this->visit($kantor, $sales, Kunjungan::HASIL_BERMINAT, '2026-03-07', ['Tabungan']);
+
+        $admin = $this->admin();
+        $q = '?dari=2026-03-01&sampai=2026-03-31';
+
+        $response = $this->actingAs($admin)->get('/laporan/summary-produk/export'.$q);
+        $response->assertOk();
+        $sheet = $this->sheetFrom($response);
+
+        $baris = $sheet['Cabang Satu'];
+        $this->assertSame('Cabang', $baris['Level']);
+        $this->assertEquals(2, $baris['Tabungan'], 'Kunjungan Berminat tidak boleh ikut dihitung.');
+        $this->assertEquals(1, $baris['Kartu Kredit']);
+        $this->assertEquals(3, $baris['Total']);
+
+        // Layar dan file harus sepakat.
+        $layar = $this->rowFor(
+            $this->rowsFrom($this->actingAs($admin)->get('/laporan/summary-produk'.$q)),
+            'Cabang Satu',
+        );
+        $this->assertEquals($layar['values']['total_produk'], $baris['Total']);
+    }
+
+    public function test_summary_produk_export_labels_subtotal_rows(): void
+    {
+        $kantor = $this->kantor('K1', 'Cabang Satu', 'AREA SATU', 'CLUSTER A');
+        $sales = $this->salesFor($kantor);
+        $this->visit($kantor, $sales, Kunjungan::HASIL_CLOSING, '2026-03-05', ['Tabungan']);
+
+        $sheet = $this->sheetFrom(
+            $this->actingAs($this->admin())->get('/laporan/summary-produk/export?dari=2026-03-01&sampai=2026-03-31')
+        );
+
+        $this->assertSame('Area', $sheet['AREA SATU']['Level']);
+        $this->assertSame('Cabang-Cluster', $sheet['CLUSTER A']['Level']);
+        $this->assertSame('TOTAL', $sheet['TOTAL']['Level']);
+    }
 }

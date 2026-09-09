@@ -232,7 +232,15 @@
 
     <div class="table-panel">
       @if ($mode === 'kunjungan')
-        <div class="panel-head"><h3>Rekap Kunjungan per Sales</h3></div>
+        <div class="panel-head">
+          <h3>Rekap Kunjungan per Sales</h3>
+        {{-- request()->query() membawa mode/periode/unit/cabang yang sedang
+             aktif, jadi isi file sama dengan yang tampil di layar. --}}
+        <a href="{{ route('laporan.rekap-sales.export', request()->query()) }}"
+           class="btn-primary-custom" style="text-decoration:none;padding:8px 16px;width:auto;font-size:12.5px;white-space:nowrap;margin-left:auto">
+          <i class="bi bi-file-earmark-excel"></i> Export Excel
+        </a>
+        </div>
         @if ($kunjunganRows->isEmpty())
           <div class="empty-state-rich">
             <i class="bi bi-clipboard-x"></i>
@@ -260,7 +268,15 @@
           </div>
         @endif
       @else
-        <div class="panel-head"><h3>Sales Belum Kunjungan</h3></div>
+        <div class="panel-head">
+          <h3>Sales Belum Kunjungan</h3>
+        {{-- request()->query() membawa mode/periode/unit/cabang yang sedang
+             aktif, jadi isi file sama dengan yang tampil di layar. --}}
+        <a href="{{ route('laporan.rekap-sales.export', request()->query()) }}"
+           class="btn-primary-custom" style="text-decoration:none;padding:8px 16px;width:auto;font-size:12.5px;white-space:nowrap;margin-left:auto">
+          <i class="bi bi-file-earmark-excel"></i> Export Excel
+        </a>
+        </div>
         @if ($tidakRows->isEmpty())
           <div class="empty-state-rich">
             <i class="bi bi-emoji-smile"></i>

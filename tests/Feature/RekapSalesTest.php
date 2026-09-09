@@ -10,6 +10,7 @@ use App\Models\User;
 use Database\Factories\PoiFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
 
 class RekapSalesTest extends TestCase
@@ -550,5 +551,112 @@ class RekapSalesTest extends TestCase
         // One visit in one of his Cabang clears him everywhere.
         $this->assertSame(1, $summary['total_tidak']);
         $this->assertSame(1, $summary['total_kunjungan']);
+    }
+
+    // --- Export Excel Rekap Sales (2026-09-09) ---
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function sheetFrom($response): array
+    {
+        $raw = IOFactory::load($response->baseResponse->getFile()->getPathname())
+            ->getActiveSheet()->toArray();
+
+        $head = $raw[1];
+        $out = [];
+        foreach (array_slice($raw, 2) as $baris) {
+            if (($baris[0] ?? null) === null || $baris[0] === '') {
+                continue;
+            }
+            $out[$baris[0]] = array_combine($head, $baris);
+        }
+
+        return $out;
+    }
+
+    public function test_kunjungan_tab_exports_the_same_rows_and_figures(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $unit = Unit::create(['nama' => 'BTRM', 'is_active' => true]);
+        $andi = $this->salesUser($kantor, $unit, ['nama_lengkap' => 'Andi Pratama']);
+        $this->salesUser($kantor, $unit, ['nama_lengkap' => 'Sales Diam']);
+
+        $poi = $this->poi($kantor, ['status' => 'aktif']);
+        foreach ([Kunjungan::HASIL_CLOSING, Kunjungan::HASIL_BERMINAT] as $hasil) {
+            Kunjungan::create(['poi_id' => $poi->id, 'sales_id' => $andi->id, 'tanggal_kunjungan' => '2026-03-05', 'hasil' => $hasil]);
+        }
+
+        $response = $this->actingAs(User::factory()->admin()->create(['force_password_change' => false]))
+            ->get('/laporan/rekap-sales/export?dari=2026-03-01&sampai=2026-03-31');
+        $response->assertOk();
+        $sheet = $this->sheetFrom($response);
+
+        $this->assertArrayHasKey('Andi Pratama', $sheet);
+        $this->assertArrayNotHasKey('Sales Diam', $sheet, 'Tab Kunjungan hanya berisi yang punya kunjungan.');
+        $this->assertSame('BTRM', $sheet['Andi Pratama']['Unit']);
+        $this->assertEquals(2, $sheet['Andi Pratama']['Total Visit']);
+        $this->assertEquals(1, $sheet['Andi Pratama']['Total Closing']);
+    }
+
+    public function test_tidak_kunjungan_tab_exports_who_is_missing(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $unit = Unit::create(['nama' => 'BTRM', 'is_active' => true]);
+        $andi = $this->salesUser($kantor, $unit, ['nama_lengkap' => 'Andi Pratama']);
+        $this->salesUser($kantor, $unit, ['nama_lengkap' => 'Sales Diam']);
+
+        $poi = $this->poi($kantor, ['status' => 'aktif']);
+        Kunjungan::create(['poi_id' => $poi->id, 'sales_id' => $andi->id, 'tanggal_kunjungan' => '2026-03-05', 'hasil' => Kunjungan::HASIL_CLOSING]);
+
+        $sheet = $this->sheetFrom(
+            $this->actingAs(User::factory()->admin()->create(['force_password_change' => false]))
+                ->get('/laporan/rekap-sales/export?mode=tidak&dari=2026-03-01&sampai=2026-03-31')
+        );
+
+        $this->assertArrayHasKey('Sales Diam', $sheet);
+        $this->assertArrayNotHasKey('Andi Pratama', $sheet);
+        $this->assertSame('Tidak Kunjungan', $sheet['Sales Diam']['Status']);
+    }
+
+    /**
+     * A sales holding several Cabang stays one row with the Cabang joined into
+     * one cell. A row per pairing would make any count taken off the sheet
+     * bigger than the number of people on it.
+     */
+    public function test_export_keeps_one_row_per_person_however_many_cabang(): void
+    {
+        $a = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $b = Kantor::create(['kode' => 'B', 'nama' => 'Kantor B']);
+        $unit = Unit::create(['nama' => 'BTRM', 'is_active' => true]);
+        $keliling = $this->salesUser($a, $unit, ['nama_lengkap' => 'Sales Keliling']);
+        $keliling->kantor()->attach($b->id);
+
+        $raw = IOFactory::load(
+            $this->actingAs(User::factory()->admin()->create(['force_password_change' => false]))
+                ->get('/laporan/rekap-sales/export?mode=tidak&dari=2026-03-01&sampai=2026-03-31')
+                ->baseResponse->getFile()->getPathname()
+        )->getActiveSheet()->toArray();
+
+        // Row 1 caption, row 2 headings, row 3 the only person.
+        $this->assertCount(3, array_filter($raw, fn ($r) => ($r[0] ?? '') !== ''));
+        $this->assertSame('Kantor A, Kantor B', $raw[2][2]);
+    }
+
+    public function test_export_carries_the_period_and_is_blocked_for_sales(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
+        $unit = Unit::create(['nama' => 'BTRM', 'is_active' => true]);
+        $sales = $this->salesUser($kantor, $unit, ['nama_lengkap' => 'Andi Pratama']);
+
+        $raw = IOFactory::load(
+            $this->actingAs(User::factory()->admin()->create(['force_password_change' => false]))
+                ->get('/laporan/rekap-sales/export?mode=tidak&dari=2026-03-01&sampai=2026-03-31')
+                ->baseResponse->getFile()->getPathname()
+        )->getActiveSheet()->toArray();
+
+        $this->assertStringContainsString('Periode 2026-03-01 s/d 2026-03-31', $raw[0][0]);
+
+        $this->actingAs($sales)->get('/laporan/rekap-sales/export')->assertForbidden();
     }
 }
