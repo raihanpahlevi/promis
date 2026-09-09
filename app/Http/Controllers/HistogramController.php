@@ -112,9 +112,9 @@ class HistogramController extends Controller
                 'kantorOptions' => $owned,
                 'selectedKantorId' => $owned->first()->id,
                 'locked' => true,
-                'areaOptions' => new Collection(),
+                'areaOptions' => new Collection,
                 'selectedArea' => null,
-                'clusterOptions' => new Collection(),
+                'clusterOptions' => new Collection,
                 'selectedCluster' => null,
             ];
         }
@@ -154,8 +154,8 @@ class HistogramController extends Controller
             ->whereIn('poi.kantor_id', $kantorIds)
             ->whereBetween('kunjungan.tanggal_kunjungan', [$dari, $sampai])
             ->select(DB::raw('DATE(kunjungan.tanggal_kunjungan) as tgl'))
-            ->selectRaw("COUNT(DISTINCT CASE WHEN kunjungan.hasil = ? THEN kunjungan.poi_id END) as closing", [Kunjungan::HASIL_CLOSING])
-            ->selectRaw("COUNT(DISTINCT CASE WHEN kunjungan.hasil <> ? THEN kunjungan.poi_id END) as non_closing", [Kunjungan::HASIL_CLOSING])
+            ->selectRaw('COUNT(DISTINCT CASE WHEN kunjungan.hasil = ? THEN kunjungan.poi_id END) as closing', [Kunjungan::HASIL_CLOSING])
+            ->selectRaw('COUNT(DISTINCT CASE WHEN kunjungan.hasil <> ? THEN kunjungan.poi_id END) as non_closing', [Kunjungan::HASIL_CLOSING])
             ->groupBy(DB::raw('DATE(kunjungan.tanggal_kunjungan)'))
             ->orderBy('tgl')
             ->get();

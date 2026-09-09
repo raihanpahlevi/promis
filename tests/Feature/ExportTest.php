@@ -10,8 +10,10 @@ use App\Models\Poi;
 use App\Models\User;
 use Database\Factories\PoiFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Tests\TestCase;
 
 class ExportTest extends TestCase
@@ -130,7 +132,7 @@ class ExportTest extends TestCase
         $response = $this->actingAs($admin)->get('/export/kunjungan/download');
 
         $response->assertOk();
-        $this->assertInstanceOf(\Symfony\Component\HttpFoundation\BinaryFileResponse::class, $response->baseResponse);
+        $this->assertInstanceOf(BinaryFileResponse::class, $response->baseResponse);
 
         $path = $response->baseResponse->getFile()->getPathname();
         $spreadsheet = IOFactory::load($path);
@@ -189,7 +191,7 @@ class ExportTest extends TestCase
     public function test_poi_export_headings_slug_to_exactly_the_importer_row_keys(): void
     {
         $slugged = array_map(
-            fn ($heading) => \Illuminate\Support\Str::slug($heading, '_'),
+            fn ($heading) => Str::slug($heading, '_'),
             (new PoiExport([1]))->headings(),
         );
 

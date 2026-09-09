@@ -4,8 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\DashboardSummary;
 use App\Models\Kantor;
+use App\Models\Kunjungan;
 use App\Models\Poi;
-use App\Models\PoiReopenLog;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\RegistersPoiRoutes;
@@ -526,10 +526,10 @@ class PoiTest extends TestCase
         $sales = User::factory()->create(['force_password_change' => false, 'role' => User::ROLE_SALES]);
         $kantor = Kantor::create(['kode' => 'X', 'nama' => 'Kantor X']);
         $poi = $this->makePoi($kantor);
-        $kunjungan = \App\Models\Kunjungan::create([
+        $kunjungan = Kunjungan::create([
             'poi_id' => $poi->id, 'sales_id' => $sales->id,
             'tanggal_kunjungan' => now()->toDateString(),
-            'hasil' => \App\Models\Kunjungan::HASIL_CLOSING,
+            'hasil' => Kunjungan::HASIL_CLOSING,
         ]);
 
         $response = $this->actingAs($admin)->delete("/poi/{$poi->id}");

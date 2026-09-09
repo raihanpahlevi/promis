@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Tests\Concerns\RegistersKantorRoutes;
@@ -35,7 +36,7 @@ class KantorTest extends TestCase
      */
     private function buildImportFixture(array $rows): UploadedFile
     {
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->fromArray(['ID', 'Kode', 'Nama', 'Aktif'], null, 'A1');
         $sheet->fromArray($rows, null, 'A2');
@@ -276,7 +277,7 @@ class KantorTest extends TestCase
         $kantor = Kantor::create(['kode' => 'JKT01', 'nama' => 'Kantor Jakarta', 'area' => 'Area Lama']);
         $admin = User::factory()->admin()->create(['force_password_change' => false]);
 
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->fromArray(['ID', 'Kode', 'Cabang', 'Aktif', 'Area', 'Cabang-Cluster'], null, 'A1');
         $sheet->fromArray([[$kantor->id, '', '', '', '', 'Cluster Jakarta']], null, 'A2');
@@ -300,7 +301,7 @@ class KantorTest extends TestCase
     {
         $admin = User::factory()->admin()->create(['force_password_change' => false]);
 
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->fromArray(['Kode', 'Cabang', 'Area', 'Cabang-Cluster'], null, 'A1');
         $sheet->fromArray([['SBY01', 'Kantor Surabaya', 'Area Jatim', 'Cluster Surabaya']], null, 'A2');
@@ -431,12 +432,15 @@ class KantorTest extends TestCase
 
         $response = $this->actingAs($admin)->get(route('export.kantor.download'));
         $response->assertOk();
-        $sheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($response->baseResponse->getFile()->getPathname())->getActiveSheet();
+        $sheet = IOFactory::load($response->baseResponse->getFile()->getPathname())->getActiveSheet();
 
         $this->assertSame('Kota Besar', $sheet->getCell('F1')->getValue());
         $baris = null;
         foreach ($sheet->toArray() as $row) {
-            if (($row[0] ?? null) == $kantor->id) { $baris = $row; break; }
+            if (($row[0] ?? null) == $kantor->id) {
+                $baris = $row;
+                break;
+            }
         }
         $this->assertNotNull($baris, 'Cabang tidak ketemu di file export.');
         $this->assertSame('Ya', $baris[5]);

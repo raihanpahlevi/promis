@@ -9,8 +9,8 @@ use App\Models\PoiReopenLog;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -281,10 +281,10 @@ class PoiController extends Controller
             $query->where('kantor_id', (int) session('active_kantor_id'));
 
             return [
-                'kantorOptions' => new Collection(),
-                'areaOptions' => new Collection(),
+                'kantorOptions' => new Collection,
+                'areaOptions' => new Collection,
                 'selectedArea' => null,
-                'clusterOptions' => new Collection(),
+                'clusterOptions' => new Collection,
                 'selectedCluster' => null,
             ];
         }

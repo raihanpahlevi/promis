@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Imports\PoiImport;
+use App\Models\ImportJob;
 use App\Models\Kantor;
 use App\Models\Kunjungan;
 use App\Models\Poi;
@@ -10,17 +11,19 @@ use App\Models\User;
 use Database\Factories\PoiFactory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use RuntimeException;
+use Tests\Concerns\ReadsImportSummary;
 use Tests\Concerns\RegistersPoiRoutes;
 use Tests\TestCase;
 
 class PoiImportTest extends TestCase
 {
+    use ReadsImportSummary;
     use RefreshDatabase;
     use RegistersPoiRoutes;
-    use \Tests\Concerns\ReadsImportSummary;
 
     protected function setUp(): void
     {
@@ -46,7 +49,7 @@ class PoiImportTest extends TestCase
      */
     private function buildFixture(array $rows): UploadedFile
     {
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
 
         $petunjuk = $spreadsheet->getActiveSheet();
         $petunjuk->setTitle('Petunjuk');
@@ -80,7 +83,7 @@ class PoiImportTest extends TestCase
      */
     private function buildFixtureWithId(array $rows): UploadedFile
     {
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
 
         $dataPoi = $spreadsheet->getActiveSheet();
         $dataPoi->setTitle('Data POI');
@@ -343,7 +346,7 @@ class PoiImportTest extends TestCase
         $admin = User::factory()->admin()->create(['force_password_change' => false]);
         Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
 
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Sheet1');
         $sheet->fromArray(['Nama', 'Alamat', 'Sektor', 'Sub Sektor', 'Area', 'Outlet', 'Bank', 'PIC'], null, 'A1');
@@ -382,7 +385,7 @@ class PoiImportTest extends TestCase
         $kantorA = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A', 'area' => 'Area Lama', 'cabang_cluster' => 'Cluster Lama']);
         $kantorB = Kantor::create(['kode' => 'B', 'nama' => 'Kantor B']);
 
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Sheet1');
         $sheet->fromArray(['Nama', 'Alamat', 'Kategori', 'Sub Kategori', 'Ring Area', 'Cabang', 'Bank', 'PIC', 'Cabang-Cluster', 'Area'], null, 'A1');
@@ -413,7 +416,7 @@ class PoiImportTest extends TestCase
         $admin = User::factory()->admin()->create(['force_password_change' => false]);
         $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A', 'area' => 'Area Lama', 'cabang_cluster' => 'Cluster Lama']);
 
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Sheet1');
         $sheet->fromArray(['Nama', 'Alamat', 'Kategori', 'Sub Kategori', 'Ring Area', 'Cabang', 'Bank', 'PIC', 'Cabang-Cluster', 'Area'], null, 'A1');
@@ -452,7 +455,7 @@ class PoiImportTest extends TestCase
         $this->assertSame(1, $summary['rejected']);
 
         $reasons = collect($summary['errors'])->flatMap(fn ($e) => $e['errors'])->implode(' | ');
-        $this->assertStringContainsString("bukan kantor yang Anda kelola", $reasons);
+        $this->assertStringContainsString('bukan kantor yang Anda kelola', $reasons);
 
         $this->assertDatabaseHas('poi', ['nama_poi' => 'Toko Milik Sendiri', 'kantor_id' => $kantorMine->id]);
         $this->assertDatabaseMissing('poi', ['nama_poi' => 'Toko Bukan Milik']);
@@ -469,7 +472,7 @@ class PoiImportTest extends TestCase
         $admin = User::factory()->admin()->create(['force_password_change' => false]);
         $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
 
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Sheet1');
         $sheet->fromArray(['Nama', 'Alamat', 'Kategori', 'Sub Kategori', 'Ring Area', 'Cabang', 'Bank', 'PIC'], null, 'A1');
@@ -712,25 +715,25 @@ class PoiImportTest extends TestCase
         $response->assertRedirect(route('poi.import.create'));
         $response->assertSessionHas('status');
 
-        $job = \App\Models\ImportJob::latest('id')->firstOrFail();
-        $this->assertSame(\App\Models\ImportJob::TYPE_POI, $job->type);
-        $this->assertSame(\App\Models\ImportJob::STATUS_DONE, $job->status);
+        $job = ImportJob::latest('id')->firstOrFail();
+        $this->assertSame(ImportJob::TYPE_POI, $job->type);
+        $this->assertSame(ImportJob::STATUS_DONE, $job->status);
         $this->assertSame(1, $job->imported_count);
         $this->assertSame(0, $job->rejected_count);
         $this->assertSame($admin->id, $job->created_by);
         $this->assertNotNull($job->finished_at);
         // The parked upload is cleaned up once the job finishes.
-        $this->assertFalse(\Illuminate\Support\Facades\Storage::disk('local')->exists($job->stored_path));
+        $this->assertFalse(Storage::disk('local')->exists($job->stored_path));
     }
 
     public function test_import_page_lists_recent_jobs(): void
     {
         $admin = User::factory()->admin()->create(['force_password_change' => false]);
-        \App\Models\ImportJob::create([
-            'type' => \App\Models\ImportJob::TYPE_POI,
+        ImportJob::create([
+            'type' => ImportJob::TYPE_POI,
             'original_filename' => 'poi_riwayat_test.xlsx',
             'stored_path' => 'imports/x.xlsx',
-            'status' => \App\Models\ImportJob::STATUS_DONE,
+            'status' => ImportJob::STATUS_DONE,
             'imported_count' => 42,
             'created_by' => $admin->id,
         ]);

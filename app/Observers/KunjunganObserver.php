@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Models\Kunjungan;
+use App\Models\Poi;
 use App\Services\DashboardSummaryService;
 
 class KunjunganObserver
@@ -12,7 +13,7 @@ class KunjunganObserver
     public function created(Kunjungan $kunjungan): void
     {
         $kantorId = $kunjungan->poi?->kantor_id
-            ?? \App\Models\Poi::whereKey($kunjungan->poi_id)->value('kantor_id');
+            ?? Poi::whereKey($kunjungan->poi_id)->value('kantor_id');
 
         // Keyed by tanggal_kunjungan (not "today") so the trend chart reflects when
         // the visit happened. Note: this means a backdated kunjungan updates an
@@ -43,7 +44,7 @@ class KunjunganObserver
     public function deleted(Kunjungan $kunjungan): void
     {
         $kantorId = $kunjungan->poi?->kantor_id
-            ?? \App\Models\Poi::whereKey($kunjungan->poi_id)->value('kantor_id');
+            ?? Poi::whereKey($kunjungan->poi_id)->value('kantor_id');
 
         if ($kantorId === null) {
             return;

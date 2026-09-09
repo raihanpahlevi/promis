@@ -5,8 +5,8 @@ namespace App\Services;
 use App\Models\DashboardSummary;
 use App\Models\Kantor;
 use Carbon\CarbonInterface;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**

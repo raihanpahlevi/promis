@@ -159,6 +159,6 @@ class ExportController extends Controller
     {
         $filename = 'data-kantor-'.now()->format('Ymd-His').'.xlsx';
 
-        return Excel::download(new KantorExport(), $filename);
+        return Excel::download(new KantorExport, $filename);
     }
 }

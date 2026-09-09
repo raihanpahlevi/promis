@@ -29,7 +29,7 @@ class KantorImportController extends Controller
             'file' => ['required', 'file', 'mimes:xlsx,xls'],
         ]);
 
-        $import = new KantorImport();
+        $import = new KantorImport;
 
         try {
             Excel::import($import, $request->file('file'));

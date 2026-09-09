@@ -12,14 +12,16 @@ use Illuminate\Support\Facades\Hash;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Tests\Concerns\ReadsImportSummary;
 use Tests\Concerns\RegistersUserRoutes;
 use Tests\TestCase;
 
 class UserImportTest extends TestCase
 {
+    use ReadsImportSummary;
     use RefreshDatabase;
     use RegistersUserRoutes;
-    use \Tests\Concerns\ReadsImportSummary;
 
     protected function setUp(): void
     {
@@ -50,7 +52,7 @@ class UserImportTest extends TestCase
      */
     private function buildFixture(array $rows): UploadedFile
     {
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
 
         $petunjuk = $spreadsheet->getActiveSheet();
         $petunjuk->setTitle('Petunjuk');
@@ -79,7 +81,7 @@ class UserImportTest extends TestCase
     public function test_on_error_reconciles_imported_count_and_records_the_exception(): void
     {
         $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
-        $import = new UserImport();
+        $import = new UserImport;
 
         $import->model([
             'npp' => '1234567', 'nama_lengkap' => 'User Satu', 'unit_jabatan' => 'STAFF',
@@ -237,7 +239,7 @@ class UserImportTest extends TestCase
         $admin = User::factory()->admin()->create(['force_password_change' => false]);
         $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A']);
 
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Sheet1');
         $sheet->fromArray(['NPP', 'Nama Lengkap', 'Unit / Jabatan', 'Role Sistem', 'Kantor'], null, 'A1');
@@ -296,7 +298,7 @@ class UserImportTest extends TestCase
         // the brief flags a prior known bug where the template route
         // returned the wrong response type.
         $this->assertInstanceOf(
-            \Symfony\Component\HttpFoundation\BinaryFileResponse::class,
+            BinaryFileResponse::class,
             $response->baseResponse
         );
         $disposition = $response->headers->get('content-disposition');
