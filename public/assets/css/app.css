@@ -838,3 +838,204 @@ tbody tr{transition:background-color 150ms ease}
   }
   .stat-card:hover,.breakdown-card:hover{transform:none}
 }
+
+/* ---------- Kontribusi Cabang (petak cakupan) ----------
+   Menggantikan grafik batang per Cabang: 112 batang tidak terbaca, dan yang
+   nilainya nol tidak punya batang sama sekali. Petak selalu ada, termasuk
+   untuk Cabang yang belum berkontribusi. Level diberi warna DAN angka —
+   warna tidak pernah jadi satu-satunya pembeda. */
+.cakupan{margin-top:14px}
+.cakupan-head{
+  display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;
+  gap:12px;margin-bottom:10px;
+}
+.cakupan-angka{font-size:26px;font-weight:700;color:var(--brand-900);line-height:1.1;
+  font-variant-numeric:tabular-nums}
+.cakupan-angka span{font-size:14px;font-weight:600;color:var(--brand-400)}
+.cakupan-sub{font-size:11.5px;color:var(--brand-400);margin-top:3px}
+
+.cakupan-filter{display:flex;gap:2px;background:var(--brand-50);padding:3px;border-radius:9px}
+.cakupan-filter button{
+  border:none;background:none;cursor:pointer;font:inherit;font-size:12px;font-weight:600;
+  color:var(--brand-400);padding:6px 14px;border-radius:7px;
+  transition:background .16s ease,color .16s ease;
+}
+.cakupan-filter button:hover{color:var(--brand-700)}
+.cakupan-filter button.is-active{background:#fff;color:var(--brand-700);box-shadow:0 1px 2px rgba(62,39,35,.1)}
+.cakupan-filter button:focus-visible{outline:2px solid var(--brand-500);outline-offset:2px}
+
+.cakupan-bar{height:5px;border-radius:3px;background:var(--brand-50);overflow:hidden;margin-bottom:14px}
+.cakupan-bar-fill{height:100%;border-radius:3px;background:var(--brand-500)}
+
+
+.cakupan-areas{display:flex;flex-direction:column;gap:16px}
+.cakupan-area h4{
+  display:flex;align-items:center;gap:8px;margin:0 0 8px;
+  font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--brand-400);
+}
+.cakupan-area h4::after{content:"";flex:1;height:1px;background:var(--brand-50)}
+.cakupan-area h4 span{
+  order:3;font-size:11px;font-weight:600;letter-spacing:0;text-transform:none;
+  color:var(--brand-500);font-variant-numeric:tabular-nums;
+}
+.cakupan-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:6px}
+
+/* Elemen ber-atribut hidden HARUS benar-benar hilang.
+   Aturan bawaan browser ([hidden]{display:none}) kalah oleh selector kelas
+   mana pun yang menetapkan display — .cakupan-sel pakai display:flex, jadi
+   petak yang disembunyikan lewat JS tetap tampil dan tombol saringnya
+   terlihat seperti tidak berfungsi. Dideklarasikan global supaya jebakan yang
+   sama tidak terulang di komponen lain. */
+[hidden]{display:none !important}
+
+/* Bentuk dasarnya menyamai .produk-box: kotak putih bergaris tipis, dan yang
+   ada isinya diberi latar krem + garis lebih pekat (.produk-box.active).
+   Konsisten dengan kartu Produk BNI di panel yang sama. */
+.cakupan-sel{
+  min-height:52px;padding:8px 10px;border-radius:9px;
+  border:1.5px solid var(--brand-100);border-left-width:3px;
+  display:flex;flex-direction:column;justify-content:space-between;gap:4px;
+  background:#fff;
+}
+.cakupan-sel-nama{
+  font-size:11px;font-weight:600;line-height:1.25;color:var(--brand-700);
+  /* Nama Cabang panjang — potong dengan elipsis, teks penuh ada di tooltip. */
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+}
+.cakupan-sel-angka{
+  font-size:19px;font-weight:800;line-height:1;color:var(--brand-900);
+  font-variant-numeric:tabular-nums;
+}
+.cakupan-sel-angka em{font-style:normal;font-size:10px;font-weight:600;margin-left:6px;color:#7A5A44}
+
+/* Tingkat kontribusi.
+   Petaknya TIDAK lagi diberi latar berwarna. Empat macam isian membuat grid
+   112 petak terlihat belang, dan teks ikut berganti warna mengikuti latar —
+   satu level bahkan turun ke 2,2:1 dan tidak terbaca. Sekarang semua petak
+   berlatar sama, angkanya besar dan tebal dengan satu warna
+   (--brand-900, 16,7:1 di atas putih), jadi yang dibaca duluan memang
+   angkanya. Tingkat kontribusi pindah ke garis kiri 3px dalam satu rona
+   cokelat yang sama, cuma beda kepekatan — memberi gradasi tanpa mengotori
+   bidang petak.
+   "Belum ada" tetap dibedakan dua kali: garis putus DAN angka yang diredupkan,
+   jadi bukan warna saja yang membedakan. */
+/* Satu latar yang sama untuk semua Cabang yang ada kunjungannya — bukan empat
+   isian berbeda seperti versi belang sebelumnya. Yang membedakan banyak
+   sedikitnya cuma garis kiri, satu rona cokelat beda kepekatan. */
+.cakupan-sel:not(.lv-0){background:var(--brand-50);border-color:var(--brand-100)}
+
+.lv-0{border-style:dashed;border-left-color:var(--brand-100)}
+.lv-0 .cakupan-sel-nama{color:var(--brand-400)}
+.lv-0 .cakupan-sel-angka{color:#8D6748;font-weight:700}
+.lv-1{border-left-color:#C9A98B}
+.lv-2{border-left-color:#A47148}
+.lv-3{border-left-color:var(--brand-500)}
+
+
+@media (max-width:640px){
+  .cakupan-grid{grid-template-columns:repeat(auto-fill,minmax(132px,1fr))}
+  .cakupan-head{align-items:flex-start}
+}
+
+/* Ringkasan hasil pada panel Kontribusi Cabang */
+.cakupan-hasil{margin-bottom:14px}
+.cakupan-hasil-utama{display:flex;gap:8px;margin-bottom:8px}
+.ch-box{
+  flex:1;min-width:0;padding:9px 12px;border-radius:9px;background:var(--brand-50);
+  display:flex;flex-direction:column;gap:2px;
+}
+.ch-box.ch-closing{background:var(--ok-bg)}
+.ch-angka{font-size:19px;font-weight:700;line-height:1.1;color:var(--brand-900);
+  font-variant-numeric:tabular-nums}
+.ch-box.ch-closing .ch-angka{color:var(--ok)}
+.ch-label{font-size:11px;font-weight:600;color:var(--brand-400)}
+.ch-box.ch-closing .ch-label{color:var(--ok)}
+
+.cakupan-tahap{display:flex;flex-wrap:wrap;gap:6px}
+.cakupan-tahap-item{
+  font-size:11px;color:var(--brand-700);background:var(--brand-50);
+  padding:4px 9px;border-radius:20px;font-variant-numeric:tabular-nums;
+}
+.cakupan-tahap-item strong{font-weight:700;margin-left:2px}
+.cakupan-tahap-item.is-nol{color:var(--brand-300);background:transparent;border:1px dashed var(--brand-100)}
+
+/* Petak jadi tombol — samakan dengan gaya tombol supaya tidak mewarisi
+   tampilan bawaan browser. */
+.cakupan-sel{
+  font:inherit;text-align:left;width:100%;cursor:pointer;
+  transition:box-shadow .16s ease,transform .16s ease;
+}
+.cakupan-sel[disabled]{cursor:default}
+.cakupan-sel:not([disabled]):hover{box-shadow:0 2px 8px rgba(62,39,35,.16)}
+.cakupan-sel:focus-visible{outline:2px solid var(--brand-500);outline-offset:2px}
+.cakupan-sel.is-open{box-shadow:0 0 0 2px var(--brand-500);border-color:var(--brand-500)}
+
+/* Rincian tahap. grid-column:1/-1 supaya panelnya melebar penuh di bawah
+   barisnya, bukan menyempil di satu kolom petak. */
+.cakupan-detail{
+  grid-column:1/-1;margin:2px 0 6px;padding:12px 14px;border-radius:10px;
+  background:#fff;border:1px solid var(--brand-100);
+}
+.cakupan-detail h5{margin:0 0 8px;font-size:12.5px;font-weight:700;color:var(--brand-900)}
+/* Tiga angka ini dulu sewarna semua dan jadi susah dibedakan sekilas.
+   Sekarang masing-masing jadi kotak dengan latar sendiri: netral untuk total,
+   hijau untuk closing, oranye untuk yang belum — sejalan dengan kotak
+   ringkasan di atas panel. Labelnya tetap ditulis, jadi warna bukan
+   satu-satunya pembeda. */
+.cakupan-detail-ringkas{
+  display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;
+  font-variant-numeric:tabular-nums;
+}
+.cakupan-detail-ringkas span{
+  display:flex;align-items:baseline;gap:6px;padding:6px 11px;border-radius:8px;
+  font-size:11.5px;font-weight:600;background:var(--brand-50);color:var(--brand-700);
+}
+.cakupan-detail-ringkas strong{font-size:15px;font-weight:700;color:var(--brand-900)}
+.cakupan-detail-ringkas .ok{background:var(--ok-bg);color:var(--ok)}
+.cakupan-detail-ringkas .ok strong{color:var(--ok)}
+.cakupan-detail-ringkas .belum{background:var(--warn-bg);color:var(--warn)}
+.cakupan-detail-ringkas .belum strong{color:var(--warn)}
+.cakupan-detail-tahap{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:2px 16px;margin:0;
+}
+.cakupan-detail-tahap div{
+  display:flex;justify-content:space-between;gap:10px;align-items:baseline;
+  padding:5px 0;border-bottom:1px solid var(--brand-50);
+}
+.cakupan-detail-tahap dt{font-size:11.5px;color:var(--brand-700);margin:0}
+.cakupan-detail-tahap dd{margin:0;font-size:12.5px;font-weight:700;color:var(--brand-900);
+  font-variant-numeric:tabular-nums}
+.cakupan-detail-tahap .is-nol dt,.cakupan-detail-tahap .is-nol dd{color:var(--brand-300);font-weight:600}
+
+/* Produk pada panel Kontribusi Cabang — sengaja di tingkat panel, bukan di
+   dalam kartu per Cabang: pertanyaannya "produk apa saja yang closing", dan
+   itu pertanyaan tentang seluruh cakupan. */
+.cakupan-produk{margin-bottom:14px}
+.cakupan-produk h5{
+  margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--brand-400);
+}
+.cakupan-produk-kolom{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+.cakupan-produk-kotak{padding:11px 13px;border-radius:10px;border:1px solid var(--brand-100);background:#fff}
+.cakupan-produk-kotak.ok{border-color:#BEE0C0;background:var(--ok-bg)}
+.cakupan-produk-judul{
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  font-size:11.5px;font-weight:700;margin-bottom:8px;color:var(--brand-700);
+}
+.cakupan-produk-kotak.ok .cakupan-produk-judul{color:var(--ok)}
+.cakupan-produk-judul span{font-size:14px;font-variant-numeric:tabular-nums}
+.cakupan-produk-list{display:flex;flex-wrap:wrap;gap:5px}
+.cakupan-produk-list span{
+  display:inline-flex;align-items:baseline;gap:5px;padding:4px 9px;border-radius:20px;
+  font-size:11px;background:#fff;border:1px solid var(--brand-100);color:var(--brand-700);
+  font-variant-numeric:tabular-nums;
+}
+.cakupan-produk-kotak.ok .cakupan-produk-list span{border-color:#BEE0C0}
+.cakupan-produk-list strong{font-weight:700}
+.cakupan-produk-kosong{font-size:11.5px;color:var(--brand-300)}
+
+.cakupan-kosong{
+  padding:18px;border:1px dashed var(--brand-100);border-radius:10px;
+  text-align:center;font-size:12px;color:var(--brand-400);
+}
+.cakupan-filter button{position:relative}

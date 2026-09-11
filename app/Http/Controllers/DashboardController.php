@@ -76,7 +76,8 @@ class DashboardController extends Controller
 
         $funnel = $this->ringkasanHasil($kantorIds, $start, $end);
         $produk = $this->produkClosing($kantorIds, $start, $end);
-        $chart = $this->chartPerKantor($kantorIds, $start, $end);
+        $cakupan = $this->cakupanCabang($kantorIds, $start, $end);
+        $produkCakupan = $this->produkCakupan($kantorIds, $start, $end);
         $closing = $this->closingStats($kantorIds, $start, $end, $totals['total_bni'], $totals['total_non']);
 
         return view('dashboard', [
@@ -95,7 +96,8 @@ class DashboardController extends Controller
             'periode' => $periode,
             'funnel' => $funnel,
             'produk' => $produk,
-            'chart' => $chart,
+            'cakupan' => $cakupan,
+            'produkCakupan' => $produkCakupan,
             'totalHasilKunjungan' => array_sum($funnel),
         ]);
     }
@@ -538,28 +540,208 @@ class DashboardController extends Controller
         return $out;
     }
 
-    private function chartPerKantor(array $kantorIds, Carbon $start, Carbon $end): array
+    /**
+     * Per-Cabang contribution for the "Kontribusi Cabang" panel.
+     *
+     * Driven from the Cabang in scope, NOT from the kunjungan table. The bar
+     * chart this replaces started at kunjungan and joined kantor, so a Cabang
+     * with no visit in the period simply had no row and vanished from the
+     * chart — which is why picking an Area still showed only a handful of its
+     * Cabang. A Cabang that contributed nothing is the single most useful
+     * thing this panel can show, so it has to be a zero, never an absence.
+     *
+     * Grouped by Area, and the thresholds are relative to the busiest Cabang
+     * in scope rather than fixed: the same panel has to stay readable whether
+     * the period is one day (counts in single digits) or All (thousands).
+     *
+     * @return array{areas: array<int, array{nama: string, cabang: array<int, array{nama: string, total: int, closing: int, level: int}>, sudah: int, jumlah: int}>, sudah: int, jumlah: int, persen: float, maks: int, ambang: array<int, array{min: int, max: int}>}
+     */
+    /**
+     * Products recorded on visits in scope, split by whether the visit closed.
+     *
+     * The existing "Produk BNI - Closing" panel answers the closing half only.
+     * Seeing the same products on visits that have NOT closed yet is what says
+     * where the pipeline actually sits — a product heavy on non-closing is a
+     * queue, not a loss.
+     *
+     * Only products with a count are returned, sorted busiest first: the
+     * option list runs to twenty-odd entries and a wall of zeros buries the
+     * few that matter.
+     *
+     * @return array{closing: array<string, int>, non_closing: array<string, int>, total_closing: int, total_non_closing: int}
+     */
+    private function produkCakupan(array $kantorIds, Carbon $start, Carbon $end): array
     {
-        if (empty($kantorIds)) {
-            return ['labels' => [], 'closing' => [], 'non_closing' => []];
+        $kosong = ['closing' => [], 'non_closing' => [], 'total_closing' => 0, 'total_non_closing' => 0];
+
+        if ($kantorIds === []) {
+            return $kosong;
         }
 
-        $rows = Kunjungan::query()
+        $rows = KunjunganProduk::query()
+            ->join('kunjungan', 'kunjungan.id', '=', 'kunjungan_produk.kunjungan_id')
             ->join('poi', 'poi.id', '=', 'kunjungan.poi_id')
-            ->join('kantor', 'kantor.id', '=', 'poi.kantor_id')
             ->whereIn('poi.kantor_id', $kantorIds)
             ->whereBetween('kunjungan.tanggal_kunjungan', [$start->toDateString(), $end->toDateString()])
-            ->select('kantor.nama as kantor_nama')
-            ->selectRaw('SUM(CASE WHEN kunjungan.hasil = ? THEN 1 ELSE 0 END) as closing', [Kunjungan::HASIL_CLOSING])
-            ->selectRaw('SUM(CASE WHEN kunjungan.hasil <> ? THEN 1 ELSE 0 END) as non_closing', [Kunjungan::HASIL_CLOSING])
-            ->groupBy('kantor.nama')
-            ->orderBy('kantor.nama')
+            ->groupBy('kunjungan_produk.produk', 'kunjungan.hasil')
+            ->select('kunjungan_produk.produk', 'kunjungan.hasil')
+            ->selectRaw('COUNT(*) as n')
             ->get();
 
+        $closing = [];
+        $non = [];
+        foreach ($rows as $r) {
+            if ($r->hasil === Kunjungan::HASIL_CLOSING) {
+                $closing[$r->produk] = ($closing[$r->produk] ?? 0) + (int) $r->n;
+            } else {
+                $non[$r->produk] = ($non[$r->produk] ?? 0) + (int) $r->n;
+            }
+        }
+
+        arsort($closing);
+        arsort($non);
+
         return [
-            'labels' => $rows->pluck('kantor_nama')->all(),
-            'closing' => $rows->pluck('closing')->map(fn ($v) => (int) $v)->all(),
-            'non_closing' => $rows->pluck('non_closing')->map(fn ($v) => (int) $v)->all(),
+            'closing' => $closing,
+            'non_closing' => $non,
+            'total_closing' => array_sum($closing),
+            'total_non_closing' => array_sum($non),
+        ];
+    }
+
+    private function cakupanCabang(array $kantorIds, Carbon $start, Carbon $end): array
+    {
+        $kosong = [
+            'areas' => [], 'sudah' => 0, 'jumlah' => 0, 'persen' => 0.0, 'maks' => 0, 'ambang' => [],
+            'tahap' => array_fill_keys(Kunjungan::HASIL_OPTIONS, 0), 'total' => 0, 'closing' => 0, 'belum_closing' => 0,
+        ];
+
+        if ($kantorIds === []) {
+            return $kosong;
+        }
+
+        $kantor = Kantor::whereIn('id', $kantorIds)
+            ->where('kode', '!=', Kantor::SENTINEL_ALL_KODE)
+            ->orderBy('nama')
+            ->get(['id', 'nama', 'area']);
+
+        if ($kantor->isEmpty()) {
+            return $kosong;
+        }
+
+        // Per Cabang PER TAHAP, not just a total: the panel has to answer
+        // "how is the follow-up going here", and a bare count can't separate a
+        // Cabang sitting on 12 Belum Berminat from one with 12 Collecting
+        // Dokumen. One grouped query for the whole scope, not one per Cabang.
+        $perTahap = Kunjungan::query()
+            ->join('poi', 'poi.id', '=', 'kunjungan.poi_id')
+            ->whereIn('poi.kantor_id', $kantorIds)
+            ->whereBetween('kunjungan.tanggal_kunjungan', [$start->toDateString(), $end->toDateString()])
+            ->groupBy('poi.kantor_id', 'kunjungan.hasil')
+            ->select('poi.kantor_id', 'kunjungan.hasil')
+            ->selectRaw('COUNT(*) as n')
+            ->get()
+            ->groupBy('kantor_id');
+
+        $hitung = $perTahap->map(function ($baris) {
+            $tahap = [];
+            foreach (Kunjungan::HASIL_OPTIONS as $hasil) {
+                $tahap[$hasil] = 0;
+            }
+            foreach ($baris as $r) {
+                if (array_key_exists($r->hasil, $tahap)) {
+                    $tahap[$r->hasil] = (int) $r->n;
+                }
+            }
+
+            $total = array_sum($tahap);
+            $closing = $tahap[Kunjungan::HASIL_CLOSING];
+
+            return [
+                'tahap' => $tahap,
+                'total' => $total,
+                'closing' => $closing,
+                'belum_closing' => $total - $closing,
+            ];
+        });
+
+        $maks = (int) collect($hitung)->max('total');
+
+        // Three bands over 1..maks, so "busiest" always reads as the darkest
+        // tile whatever the period. Level 0 is reserved for a true zero and is
+        // never just "the lowest band".
+        $ambang = [];
+        if ($maks > 0) {
+            $lebar = max(1, (int) ceil($maks / 3));
+            for ($i = 0; $i < 3; $i++) {
+                $ambang[$i + 1] = [
+                    'min' => $i * $lebar + 1,
+                    'max' => min($maks, ($i + 1) * $lebar),
+                ];
+            }
+        }
+
+        $level = function (int $total) use ($ambang): int {
+            if ($total <= 0) {
+                return 0;
+            }
+            foreach ($ambang as $tingkat => $batas) {
+                if ($total <= $batas['max']) {
+                    return $tingkat;
+                }
+            }
+
+            return 3;
+        };
+
+        $tahapKosong = array_fill_keys(Kunjungan::HASIL_OPTIONS, 0);
+
+        $areas = [];
+        $sudah = 0;
+        $tahapTotal = $tahapKosong;
+        foreach ($kantor as $k) {
+            $baris = $hitung[$k->id] ?? null;
+            $total = (int) ($baris['total'] ?? 0);
+            if ($total > 0) {
+                $sudah++;
+            }
+
+            $tahap = $baris['tahap'] ?? $tahapKosong;
+            foreach ($tahap as $nama => $n) {
+                $tahapTotal[$nama] += $n;
+            }
+
+            $namaArea = $k->area ?: 'Tanpa Area';
+            $areas[$namaArea]['nama'] = $namaArea;
+            $areas[$namaArea]['cabang'][] = [
+                'nama' => $k->nama,
+                'total' => $total,
+                'closing' => (int) ($baris['closing'] ?? 0),
+                'belum_closing' => (int) ($baris['belum_closing'] ?? 0),
+                'tahap' => $tahap,
+                'level' => $level($total),
+            ];
+        }
+
+        ksort($areas);
+        foreach ($areas as $nama => $area) {
+            $areas[$nama]['sudah'] = count(array_filter($area['cabang'], fn ($c) => $c['total'] > 0));
+            $areas[$nama]['jumlah'] = count($area['cabang']);
+        }
+
+        $totalSemua = array_sum($tahapTotal);
+
+        return [
+            'areas' => array_values($areas),
+            'sudah' => $sudah,
+            'jumlah' => $kantor->count(),
+            'persen' => $kantor->count() > 0 ? round($sudah / $kantor->count() * 100, 1) : 0.0,
+            'maks' => $maks,
+            'ambang' => $ambang,
+            'tahap' => $tahapTotal,
+            'total' => $totalSemua,
+            'closing' => $tahapTotal[Kunjungan::HASIL_CLOSING],
+            'belum_closing' => $totalSemua - $tahapTotal[Kunjungan::HASIL_CLOSING],
         ];
     }
 

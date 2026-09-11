@@ -491,4 +491,113 @@ class DashboardTest extends TestCase
         $this->actingAs($admin)->get('/dashboard?periode=sepanjang-masa')
             ->assertViewHas('periode', 'day');
     }
+
+    // ---------------- Kontribusi Cabang (2026-09-11) ----------------
+
+    /**
+     * The bar chart this replaced was built from the kunjungan table, so a
+     * Cabang with no visit in the period produced no row and disappeared from
+     * the panel — picking an Area showed only the handful that happened to be
+     * busy. A Cabang that contributed nothing is exactly what this panel is
+     * for, so it has to appear as a zero.
+     */
+    public function test_a_cabang_with_no_visits_still_appears_as_a_zero(): void
+    {
+        $ramai = Kantor::create(['kode' => 'A', 'nama' => 'Kantor Ramai', 'area' => 'AREA SATU']);
+        $sepi = Kantor::create(['kode' => 'B', 'nama' => 'Kantor Sepi', 'area' => 'AREA SATU']);
+
+        $poi = $this->poi($ramai);
+        $sales = User::factory()->create(['force_password_change' => false]);
+        $sales->kantor()->attach($ramai->id);
+        Kunjungan::create([
+            'poi_id' => $poi->id, 'sales_id' => $sales->id,
+            'tanggal_kunjungan' => now()->toDateString(), 'hasil' => Kunjungan::HASIL_CLOSING,
+        ]);
+
+        $response = $this->actingAs(User::factory()->admin()->create(['force_password_change' => false]))
+            ->get('/dashboard');
+
+        $response->assertOk();
+        $cakupan = $response->viewData('cakupan');
+
+        $this->assertSame(2, $cakupan['jumlah'], 'Kedua Cabang harus terhitung.');
+        $this->assertSame(1, $cakupan['sudah']);
+        $this->assertSame(50.0, $cakupan['persen']);
+
+        $cabang = collect($cakupan['areas'])->firstWhere('nama', 'AREA SATU')['cabang'];
+        $this->assertSame(['Kantor Ramai', 'Kantor Sepi'], collect($cabang)->pluck('nama')->all());
+        $this->assertSame(0, collect($cabang)->firstWhere('nama', 'Kantor Sepi')['total']);
+        $this->assertSame(0, collect($cabang)->firstWhere('nama', 'Kantor Sepi')['level'], 'Nol harus level 0, bukan level terendah.');
+
+        $response->assertSee('Kantor Sepi', false);
+    }
+
+    public function test_cabang_are_grouped_by_area_with_their_own_tally(): void
+    {
+        $satu = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A', 'area' => 'AREA SATU']);
+        Kantor::create(['kode' => 'B', 'nama' => 'Kantor B', 'area' => 'AREA DUA']);
+        Kantor::create(['kode' => 'C', 'nama' => 'Kantor C', 'area' => null]);
+
+        $poi = $this->poi($satu);
+        $sales = User::factory()->create(['force_password_change' => false]);
+        $sales->kantor()->attach($satu->id);
+        Kunjungan::create([
+            'poi_id' => $poi->id, 'sales_id' => $sales->id,
+            'tanggal_kunjungan' => now()->toDateString(), 'hasil' => Kunjungan::HASIL_BERMINAT,
+        ]);
+
+        $cakupan = $this->actingAs(User::factory()->admin()->create(['force_password_change' => false]))
+            ->get('/dashboard')->viewData('cakupan');
+
+        $this->assertSame(
+            ['AREA DUA', 'AREA SATU', 'Tanpa Area'],
+            collect($cakupan['areas'])->pluck('nama')->all(),
+        );
+
+        $areaSatu = collect($cakupan['areas'])->firstWhere('nama', 'AREA SATU');
+        $this->assertSame(1, $areaSatu['sudah']);
+        $this->assertSame(1, $areaSatu['jumlah']);
+        $this->assertSame(0, collect($cakupan['areas'])->firstWhere('nama', 'AREA DUA')['sudah']);
+    }
+
+    /**
+     * Thresholds scale to the busiest Cabang in scope, so the panel reads the
+     * same whether the period holds single-digit counts or thousands.
+     */
+    public function test_levels_scale_to_the_busiest_cabang_in_scope(): void
+    {
+        $kantor = Kantor::create(['kode' => 'A', 'nama' => 'Kantor A', 'area' => 'AREA SATU']);
+        $poi = $this->poi($kantor);
+        $sales = User::factory()->create(['force_password_change' => false]);
+        $sales->kantor()->attach($kantor->id);
+
+        for ($i = 0; $i < 9; $i++) {
+            Kunjungan::create([
+                'poi_id' => $poi->id, 'sales_id' => $sales->id,
+                'tanggal_kunjungan' => now()->toDateString(), 'hasil' => Kunjungan::HASIL_BERMINAT,
+            ]);
+        }
+
+        $cakupan = $this->actingAs(User::factory()->admin()->create(['force_password_change' => false]))
+            ->get('/dashboard')->viewData('cakupan');
+
+        $this->assertSame(9, $cakupan['maks']);
+        $this->assertSame(['min' => 1, 'max' => 3], $cakupan['ambang'][1]);
+        $this->assertSame(['min' => 7, 'max' => 9], $cakupan['ambang'][3]);
+        $this->assertSame(3, collect($cakupan['areas'])->first()['cabang'][0]['level']);
+    }
+
+    public function test_coverage_follows_the_area_filter(): void
+    {
+        Kantor::create(['kode' => 'A', 'nama' => 'Kantor A', 'area' => 'AREA SATU']);
+        Kantor::create(['kode' => 'B', 'nama' => 'Kantor B', 'area' => 'AREA SATU']);
+        Kantor::create(['kode' => 'C', 'nama' => 'Kantor C', 'area' => 'AREA DUA']);
+
+        $cakupan = $this->actingAs(User::factory()->admin()->create(['force_password_change' => false]))
+            ->get('/dashboard?area=AREA+SATU')->viewData('cakupan');
+
+        // Every Cabang of the chosen Area, not only the ones with visits.
+        $this->assertSame(2, $cakupan['jumlah']);
+        $this->assertSame(['AREA SATU'], collect($cakupan['areas'])->pluck('nama')->all());
+    }
 }

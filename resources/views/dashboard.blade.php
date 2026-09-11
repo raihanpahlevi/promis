@@ -221,8 +221,157 @@
         @endforeach
       </div>
 
-      <div class="chart-mini">
-        <canvas id="chartKunjungan"></canvas>
+      {{-- Kontribusi Cabang — menggantikan grafik batang per Cabang.
+           Grafik batang tidak sanggup memuat 112 Cabang (pedoman: batang
+           efektif sampai ~15 kategori), dan yang lebih penting: grafik lama
+           dibangun dari tabel kunjungan, jadi Cabang tanpa kunjungan tidak
+           punya batang sama sekali dan hilang dari layar. Padahal justru itu
+           yang paling perlu terlihat. --}}
+      <div class="cakupan">
+        <div class="cakupan-head">
+          <div>
+            <div class="cakupan-angka">
+              {{ $cakupan['sudah'] }} <span>/ {{ $cakupan['jumlah'] }} Cabang</span>
+            </div>
+            <div class="cakupan-sub">sudah berkontribusi pada periode ini &mdash; {{ $cakupan['persen'] }}%</div>
+          </div>
+
+          @if ($cakupan['jumlah'] > 0)
+            <div class="cakupan-filter" role="group" aria-label="Saring Cabang">
+              <button type="button" class="is-active" data-saring="semua" aria-pressed="true">Semua</button>
+              <button type="button" data-saring="sudah" aria-pressed="false">Sudah</button>
+              <button type="button" data-saring="belum" aria-pressed="false">Belum</button>
+            </div>
+          @endif
+        </div>
+
+        @if ($cakupan['jumlah'] === 0)
+          <div class="empty-state-rich">
+            <i class="bi bi-diagram-3" aria-hidden="true"></i>
+            <p>Belum ada Cabang pada filter ini.</p>
+          </div>
+        @else
+          <div class="cakupan-bar" aria-hidden="true">
+            <div class="cakupan-bar-fill" style="width:{{ $cakupan['persen'] }}%"></div>
+          </div>
+
+          {{-- Ringkasan hasil pada cakupan ini. Closing vs belum closing dulu,
+               baru rinciannya per tahap follow-up. --}}
+          @if ($cakupan['total'] > 0)
+            <div class="cakupan-hasil">
+              <div class="cakupan-hasil-utama">
+                <div class="ch-box ch-closing">
+                  <span class="ch-angka">{{ number_format($cakupan['closing']) }}</span>
+                  <span class="ch-label">Closing</span>
+                </div>
+                <div class="ch-box">
+                  <span class="ch-angka">{{ number_format($cakupan['belum_closing']) }}</span>
+                  <span class="ch-label">Belum Closing</span>
+                </div>
+              </div>
+              <div class="cakupan-tahap">
+                @foreach ($cakupan['tahap'] as $nama => $n)
+                  @continue($nama === \App\Models\Kunjungan::HASIL_CLOSING)
+                  <span class="cakupan-tahap-item {{ $n === 0 ? 'is-nol' : '' }}">
+                    {{ $nama }} <strong>{{ number_format($n) }}</strong>
+                  </span>
+                @endforeach
+              </div>
+            </div>
+          @endif
+
+          {{-- Produk yang tercatat pada cakupan ini. Di tingkat panel, bukan di
+               dalam kartu per Cabang: pertanyaannya "produk apa saja yang
+               closing", dan itu soal keseluruhan. --}}
+          @if ($produkCakupan['total_closing'] > 0 || $produkCakupan['total_non_closing'] > 0)
+            <div class="cakupan-produk">
+              <h5>Produk Tercatat</h5>
+              <div class="cakupan-produk-kolom">
+                <div class="cakupan-produk-kotak ok">
+                  <div class="cakupan-produk-judul">
+                    Produk Closing <span>{{ number_format($produkCakupan['total_closing']) }}</span>
+                  </div>
+                  @if ($produkCakupan['closing'] === [])
+                    <div class="cakupan-produk-kosong">Belum ada produk pada kunjungan closing.</div>
+                  @else
+                    <div class="cakupan-produk-list">
+                      @foreach ($produkCakupan['closing'] as $nama => $n)
+                        <span>{{ $nama }} <strong>{{ number_format($n) }}</strong></span>
+                      @endforeach
+                    </div>
+                  @endif
+                </div>
+
+                <div class="cakupan-produk-kotak">
+                  <div class="cakupan-produk-judul">
+                    Produk Belum Closing <span>{{ number_format($produkCakupan['total_non_closing']) }}</span>
+                  </div>
+                  @if ($produkCakupan['non_closing'] === [])
+                    <div class="cakupan-produk-kosong">Belum ada produk pada kunjungan yang belum closing.</div>
+                  @else
+                    <div class="cakupan-produk-list">
+                      @foreach ($produkCakupan['non_closing'] as $nama => $n)
+                        <span>{{ $nama }} <strong>{{ number_format($n) }}</strong></span>
+                      @endforeach
+                    </div>
+                  @endif
+                </div>
+              </div>
+            </div>
+          @endif
+
+          <div class="cakupan-kosong" id="cakupanKosong" hidden></div>
+
+          <div class="cakupan-areas">
+            @foreach ($cakupan['areas'] as $area)
+              <section class="cakupan-area" data-area>
+                <h4>
+                  {{ $area['nama'] }}
+                  <span>{{ $area['sudah'] }}/{{ $area['jumlah'] }}</span>
+                </h4>
+                <div class="cakupan-grid">
+                  @foreach ($area['cabang'] as $c)
+                    {{-- Tombol, bukan div: rincian tahap harus bisa dibuka lewat
+                         keyboard juga, tidak cuma hover. Cabang tanpa kunjungan
+                         tidak bisa diklik karena memang tidak ada yang dibuka. --}}
+                    <button type="button"
+                            class="cakupan-sel lv-{{ $c['level'] }}"
+                            data-sudah="{{ $c['total'] > 0 ? '1' : '0' }}"
+                            @disabled($c['total'] === 0)
+                            @if ($c['total'] > 0) aria-expanded="false" @endif
+                            title="{{ $c['nama'] }}">
+                      <span class="cakupan-sel-nama">{{ $c['nama'] }}</span>
+                      <span class="cakupan-sel-angka">
+                        {{ number_format($c['total']) }}
+                        @if ($c['closing'] > 0)
+                          <em>{{ number_format($c['closing']) }} closing</em>
+                        @endif
+                      </span>
+                    </button>
+                    @if ($c['total'] > 0)
+                      <div class="cakupan-detail" hidden>
+                        <h5>{{ $c['nama'] }}</h5>
+                        <div class="cakupan-detail-ringkas">
+                          <span><strong>{{ number_format($c['total']) }}</strong> kunjungan</span>
+                          <span class="ok"><strong>{{ number_format($c['closing']) }}</strong> closing</span>
+                          <span class="belum"><strong>{{ number_format($c['belum_closing']) }}</strong> belum closing</span>
+                        </div>
+                        <dl class="cakupan-detail-tahap">
+                          @foreach ($c['tahap'] as $nama => $n)
+                            <div class="{{ $n === 0 ? 'is-nol' : '' }}">
+                              <dt>{{ $nama }}</dt>
+                              <dd>{{ number_format($n) }}</dd>
+                            </div>
+                          @endforeach
+                        </dl>
+                      </div>
+                    @endif
+                  @endforeach
+                </div>
+              </section>
+            @endforeach
+          </div>
+        @endif
       </div>
     </div>
   </div>
@@ -381,24 +530,72 @@ initChipPicker({
   allSelectedText: 'Semua Cabang-Cluster sudah dipilih',
 });
 
-new Chart(document.getElementById('chartKunjungan'), {
-  type: 'bar',
-  data: {
-    labels: @json($chart['labels']),
-    datasets: [
-      {label: 'Closing', data: @json($chart['closing']), backgroundColor: '#6F4E37'},
-      {label: 'Belum Closing', data: @json($chart['non_closing']), backgroundColor: '#D7C4B3'}
-    ]
-  },
-  options: {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {legend: {position: 'bottom', labels: {font: {size: 11}}}},
-    scales: {
-      y: {beginAtZero: true, ticks: {font: {size: 10}}},
-      x: {ticks: {font: {size: 9}}}
-    }
+(function () {
+  // Saring petak Cabang. Menyembunyikan juga judul Area yang jadi kosong,
+  // supaya tidak ada kepala Area menggantung tanpa isi.
+  var tombol = document.querySelectorAll('.cakupan-filter button');
+  if (!tombol.length) return;
+
+  var kosong = document.getElementById('cakupanKosong');
+
+  function tutupSemuaRincian() {
+    document.querySelectorAll('.cakupan-detail').forEach(function (d) { d.hidden = true; });
+    document.querySelectorAll('.cakupan-sel[aria-expanded]').forEach(function (b) {
+      b.setAttribute('aria-expanded', 'false');
+      b.classList.remove('is-open');
+    });
   }
-});
+
+  tombol.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var pilih = btn.dataset.saring;
+
+      tombol.forEach(function (b) {
+        var aktif = b === btn;
+        b.classList.toggle('is-active', aktif);
+        b.setAttribute('aria-pressed', aktif ? 'true' : 'false');
+      });
+
+      // Rincian yang terbuka ikut ditutup: kalau tidak, panelnya bisa
+      // tertinggal terbuka sementara petak pemiliknya sudah disembunyikan.
+      tutupSemuaRincian();
+
+      var total = 0;
+      document.querySelectorAll('.cakupan-area').forEach(function (area) {
+        var tampil = 0;
+        area.querySelectorAll('.cakupan-sel').forEach(function (sel) {
+          var cocok = pilih === 'semua'
+            || (pilih === 'sudah' && sel.dataset.sudah === '1')
+            || (pilih === 'belum' && sel.dataset.sudah === '0');
+          sel.hidden = !cocok;
+          if (cocok) tampil++;
+        });
+        area.hidden = tampil === 0;
+        total += tampil;
+      });
+
+      kosong.textContent = pilih === 'belum'
+        ? 'Semua Cabang pada cakupan ini sudah berkontribusi.'
+        : 'Belum ada Cabang yang berkontribusi pada cakupan ini.';
+      kosong.hidden = total > 0;
+    });
+  });
+
+  // Buka rincian tahap satu per satu — dua panel terbuka sekaligus bikin
+  // petaknya loncat-loncat dan susah dibandingkan.
+  document.querySelectorAll('.cakupan-sel[aria-expanded]').forEach(function (sel) {
+    sel.addEventListener('click', function () {
+      var detail = sel.nextElementSibling;
+      if (!detail || !detail.classList.contains('cakupan-detail')) return;
+      var buka = detail.hidden;
+
+      tutupSemuaRincian();
+
+      detail.hidden = !buka;
+      sel.setAttribute('aria-expanded', buka ? 'true' : 'false');
+      sel.classList.toggle('is-open', buka);
+    });
+  });
+})();
 </script>
 @endpush
